@@ -32,6 +32,31 @@ def with_nvtx_range(
     def init(_model: Model, X: Any, Y: Any) -> Model:
         return layer.initialize(X, Y)
 
-    return Model(
-        f"nvtx_range({name})", forward, init=init, layers=[layer], shims=layer.shims
+    m = Model(
+        f"nvtx_range({name})",
+        forward,
+        init=init,
+        layers=[layer],
+        shims=layer.shims,
+        dims=layer._dims,
     )
+
+    return NVTXWrapper(m)
+
+
+class NVTXWrapper:
+    def __init__(self, model):
+        self._model = model
+
+    def __getattr__(self, attr):
+        if (
+            attr == "begin_update"
+            or attr == "initialize"
+            or attr == "predict"
+            or attr == "finish_update"
+        ):
+            return getattr(self._model, attr)
+        return getattr(self._model.layers[0], attr)
+
+    def __call__(self, X, is_train):
+        return self._model(X, is_train)
