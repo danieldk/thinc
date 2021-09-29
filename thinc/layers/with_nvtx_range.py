@@ -1,6 +1,6 @@
 from typing import Optional, Callable, Any, Tuple
 
-from ..model import Model, wrap_with_callbacks
+from ..model import BaseModel, DelegateModel, Model, wrap_with_callbacks
 from ..util import use_nvtx_range
 
 
@@ -19,7 +19,7 @@ def with_nvtx_range(
     """
     name = layer.name if name is None else name
 
-    def forward(model: Model, X: Any, is_train: bool) -> Tuple[Any, Callable]:
+    def forward(_model: DelegateModel, X: Any, is_train: bool) -> Tuple[Any, Callable]:
         with use_nvtx_range(f"{name} forward", forward_color):
             layer_Y, layer_callback = layer(X, is_train=is_train)
 
@@ -29,7 +29,7 @@ def with_nvtx_range(
 
         return layer_Y, backprop
 
-    def init(_model: Model, X: Any, Y: Any) -> Model:
+    def init(_model: DelegateModel, X: Any, Y: Any) -> BaseModel:
         return layer.initialize(X, Y)
 
     return wrap_with_callbacks(layer, f"debug({name})", forward, init=init)

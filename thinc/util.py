@@ -469,7 +469,7 @@ def data_validation(validation):
         DATA_VALIDATION.set(prev)
 
 @contextlib.contextmanager
-def use_nvtx_range(message: int, id_color: int = -1):
+def use_nvtx_range(message: str, id_color: int = -1):
     """Context manager to register the executed code as an NVTX range. The
     ranges can be used as markers in CUDA profiling."""
     if has_cupy:
