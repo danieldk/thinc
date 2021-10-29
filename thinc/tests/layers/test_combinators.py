@@ -116,6 +116,16 @@ def test_chain_three(model1, model2, model3):
     assert len(model.layers) == 3
 
 
+@pytest.mark.parametrize("layer1", [Linear(), Linear(nI=1), Linear(nO=2)])
+@pytest.mark.parametrize("layer2", [Linear(), Linear(nI=2), Linear(nO=3)])
+@pytest.mark.parametrize("layer3", [Linear(), Linear(nI=3), Linear(nO=4)])
+def test_chain_shape_inference(layer1, layer2, layer3):
+    X_ones = numpy.ones((1, 1), dtype="f")
+    Y_ones = numpy.ones((1, 4), dtype="f")
+    model = chain(layer1.copy(), layer2.copy(), layer3.copy())
+    model.initialize(X=X_ones, Y=Y_ones)
+
+
 def test_chain_operator_three(model1, model2, model3):
     # Previously we 'flattened' these nested calls. We might opt to do so
     # again, especially for the operators.

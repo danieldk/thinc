@@ -67,6 +67,12 @@ def forward(model: Model[InT, OutT], X: InT, is_train: bool) -> Tuple[OutT, Call
 def init(
     model: Model[InT, OutT], X: Optional[InT] = None, Y: Optional[OutT] = None
 ) -> Model[InT, OutT]:
+    if model.has_dim("nO") is True and model.layers[-1].has_dim("nO") is None:
+        model.layers[-1].set_dim("nO", model.get_dim("nO"))
+    for (prev_layer, next_layer) in zip(model.layers, model.layers[1:]):
+        if prev_layer.has_dim("nO") is None and next_layer.has_dim("nI") is True:
+            prev_layer.set_dim("nO", next_layer.get_dim("nI"))
+
     if X is None and Y is None:
         for layer in model.layers:
             layer.initialize()
