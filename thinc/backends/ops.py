@@ -863,7 +863,7 @@ class Ops:
         return X * cdf  # type: ignore
 
     def backprop_gelu(
-        self, dY: FloatsType, X: FloatsType, inplace: bool = False
+            self, dY: FloatsType, X: FloatsType, inplace: bool = False
     ) -> FloatsType:
         # GELU'(x) = Φ(x) + x · PDF(x)
         dX = gaussian_cdf(self, X) + X * gaussian_pdf(self, X)  # type: ignore
