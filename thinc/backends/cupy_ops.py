@@ -108,6 +108,20 @@ class CupyOps(Ops):
     def backprop_mish(self, dY, X, threshold=20.0, out=None):
         return _custom_kernels.backprop_mish(dY, X, threshold=threshold, out=out)
 
+    def swish(self, X, inplace=False):
+        if X.dtype == "float32":
+            return _custom_kernels.swish(X, inplace=inplace, threshold=17.0)
+        else:
+            return super().swish(X, inplace=inplace)
+
+    def backprop_swish(self, dY, X, Y, inplace=False):
+        if X.dtype == "float32":
+            return _custom_kernels.backprop_swish(
+                dY, X, Y, inplace=inplace, threshold=17.0
+            )
+        else:
+            return super().backprop_swish(dY, X, Y, inplace=inplace)
+
     def clip_gradient(self, gradient, threshold):
         # We do not use CuPy's linalg.norm, since it uses scalar reductions
         # using one CUDA block. This is a lot slower than the cuBLAS
