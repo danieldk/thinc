@@ -182,7 +182,7 @@ class NumpyOps(Ops):
         else:
             return dX
 
-    def seq2col(self, const float[:, ::1] seq, int nW):
+    def seq2col(self, const float[:, ::1] seq, int nW, const int[:] lens = None):
         """Given an (M, N) sequence of vectors, return an (M, N*(nW*2+1))
         sequence. The new sequence is constructed by concatenating nW preceding
         and succeeding vectors onto each column in the sequence, to extract a
@@ -190,8 +190,16 @@ class NumpyOps(Ops):
         """
         cdef int B = seq.shape[0]
         cdef int I = seq.shape[1]
+
+        if lens is None:
+            lens = self.asarray1i([B])
+        else:
+            assert self.xp.all(self.xp.array(lens) >= 0), "All sequence lengths must be >= 0"
+            assert self.xp.sum(lens) == B, "The lengths must sum up to the batch length"
+        cdef int nL = lens.shape[0]
+
         cdef np.ndarray cols = self.alloc((B, (2*nW + 1) * I), dtype="float32")
-        seq2col(<float*>cols.data, &seq[0,0], nW, B, I)
+        seq2col(<float*>cols.data, &seq[0,0], &lens[0], nW, B, I, nL)
         return cols
 
     def backprop_seq2col(self, const float[:, ::1] dY, int nW):
@@ -361,7 +369,7 @@ class NumpyOps(Ops):
         return out_
 
 
-cdef void seq2col(float* output, const float* X, int nW, int B, int I) nogil:
+cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, int I, int nL) nogil:
     '''
     Let's say nW is 1 (it usually is). Then we want to take:
 
@@ -394,18 +402,32 @@ cdef void seq2col(float* output, const float* X, int nW, int B, int I) nogil:
     * x_start=0, x_end=16 : (2-2) * 3, (2+2+1) * 3
 
     '''
-    nF = nW * 2 + 1
-    for i in range(B):
-        o_start = i * I * nF
-        x_start = (i-nW) * I
-        x_end = (i+nW+1) * I
-        if x_start < 0:
-            o_start += -x_start
-            x_start = 0
-        if x_end >= B * I:
-            x_end = B * I
-        memcpy(&output[o_start],
-            &X[x_start], (x_end-x_start) * sizeof(output[0]))
+
+    cdef int nF = nW * 2 + 1
+
+    cdef int i, j, seq_start, seq_end
+    cdef int offset = 0
+    for i in range(nL):
+        seq_start = offset * I
+        seq_end = (offset + L[i]) * I
+
+        # Four-argument range loop only works with constant step.
+        j = seq_start
+        while j < seq_end:
+            window_begin = j - (nW * I)
+            window_end = j + (nW + 1) * I
+
+            x_begin = max(seq_start, window_begin)
+            x_end = min(seq_end, window_end)
+            n_elems = x_end - x_begin
+
+            out_offset = x_begin - window_begin
+
+            memcpy(output + (j * nF) + out_offset, X + x_begin, n_elems * sizeof(output[0]))
+
+            j += I
+
+        offset += L[i]
 
 
 cdef void backprop_seq2col(float* d_seqs,

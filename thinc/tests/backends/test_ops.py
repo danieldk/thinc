@@ -1,3 +1,4 @@
+from numpy.testing._private.utils import assert_equal
 import pytest
 import numpy
 from hypothesis import given, settings
@@ -200,6 +201,24 @@ def test_seq2col_window_one(ops, X):
     target = base_ops.seq2col(base_ops.asarray(baseX), nW=1)
     predicted = ops.seq2col(X, nW=1)
     ops.xp.testing.assert_allclose(target, predicted, atol=0.001, rtol=0.001)
+
+
+@pytest.mark.parametrize("ops", XP_OPS)
+def test_seq2col_lens(ops):
+    X = ops.xp.arange(1.0, 13.0, dtype="float32").reshape(4, 3)
+    lens = ops.asarray1i([1, 2, 1])
+    cols = ops.seq2col(X, 1, lens)
+    assert_equal(
+        cols,
+        ops.asarray2f(
+            [
+                [0, 0, 0, 1, 2, 3, 0, 0, 0],
+                [0, 0, 0, 4, 5, 6, 7, 8, 9],
+                [4, 5, 6, 7, 8, 9, 0, 0, 0],
+                [0, 0, 0, 10, 11, 12, 0, 0, 0],
+            ]
+        ),
+    )
 
 
 @pytest.mark.parametrize("ops", ALL_OPS)

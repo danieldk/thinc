@@ -1,4 +1,4 @@
-cdef void seq2col(float* output, const float* X, int B, int I, int nW) nogil
+cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, int I, int nL) nogil
 
 cdef void backprop_seq2col(float* d_seqs,
         const float* d_cols, int B, int I, int nW) nogil
