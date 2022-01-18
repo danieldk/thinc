@@ -414,20 +414,19 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
 
     cdef int nF = nW * 2 + 1
 
-    cdef int i, j, seq_start, seq_end
+    cdef int i, j, seq_start, seq_end, window_begin, window_end
     cdef int offset = 0
     for i in range(nL):
         # Calculate the bounds of the next sequence.
-        seq_start = offset * I
-        seq_end = (offset + L[i]) * I
+        seq_start = offset
+        seq_end = offset + L[i]
 
         # Four-argument range loop only works with constant step.
-        j = seq_start
-        while j < seq_end:
+        for j in range(seq_start, seq_end):
             # Find the unconstrained window around b, which
             # may be out of the sequence bounds.
-            window_begin = j - (nW * I)
-            window_end = j + (nW + 1) * I
+            window_begin = j - nW
+            window_end = j + nW + 1
 
             # Find the sequence-constrained window around b.
             x_begin = max(seq_start, window_begin)
@@ -436,9 +435,9 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
 
             out_offset = x_begin - window_begin
 
-            memcpy(output + (j * nF) + out_offset, X + x_begin, n_elems * sizeof(output[0]))
-
-            j += I
+            memcpy(output + (j * nF * I) + (out_offset * I),
+                   X + (x_begin * I),
+                   n_elems * I * sizeof(output[0]))
 
         offset += L[i]
 
@@ -455,33 +454,31 @@ cdef void backprop_seq2col(float* d_seqs,
 
     cdef int nF = nW * 2 + 1
 
-    cdef int i, j, seq_start, seq_end
+    cdef int i, j, seq_start, seq_end, window_begin, window_end
     cdef int offset = 0
     for i in range(nL):
         # Calculate the bounds of the next sequence.
-        seq_start = offset * I
-        seq_end = (offset + L[i]) * I
+        seq_start = offset
+        seq_end = offset + L[i]
 
-        # Four-argument range loop only works with constant step.
-        j = seq_start
-        while j < seq_end:
+        for j in range(seq_start, seq_end):
             # Find the unconstrained window around b, which
             # may be out of the sequence bounds.
-            window_begin = j - (nW * I)
-            window_end = j + (nW + 1) * I
+            window_begin = j - nW
+            window_end = j + nW + 1
 
             # Find the sequence-constrained window around b.
-            x_begin = max(seq_start, window_begin)
-            x_end = min(seq_end, window_end)
-            n_elems = x_end - x_begin
+            d_seqs_begin = max(seq_start, window_begin)
+            d_seqs_end = min(seq_end, window_end)
+            n_elems = d_seqs_end - d_seqs_begin
 
             # If the left window is cut short, we want to
             # start by the same amount in the output.
-            out_offset = x_begin - window_begin
+            out_offset = d_seqs_begin - window_begin
 
-            VecVec.add_i(&d_seqs[x_begin], &d_cols[(j * nF) + out_offset], 1., n_elems)
-
-            j += I
+            VecVec.add_i(&d_seqs[d_seqs_begin * I],
+                    &d_cols[(j * nF * I) + (out_offset * I)],
+                    1., n_elems * I)
 
         offset += L[i]
 
