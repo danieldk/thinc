@@ -5,7 +5,7 @@
 
 extern "C" __global__
 void seq2col(float* output,
-    const float* X, int nW, int B, int I)
+    const float* X, const int* lens, int nW, int B, int I, int nL)
 {
     // Let's say nW is 1 (it usually is). Then we want to take:
 
@@ -41,32 +41,38 @@ void seq2col(float* output,
     int nF = nW * 2 + 1;
     for (int b = _loop_start; b < B; b += _loop_stride)
     {
-        int o_start = b * I * nF;
-        // Let's say b=0, nW=1, I=10, B=20
-        // x_start = (0-1) * 10 : -10
-        // x_end = (0+1+1)*10 : 20
-        // o_start = (0*0*3) = 0
-        int x_start = (b-nW) * I;
-        int x_end = (b+nW+1) * I;
-        if (x_start < 0)
-        {
-            // Adjust o_start to 10, because we're skipping
-            // the first feature
-            o_start += -x_start;
-            x_start = 0;
+        // Find sequence offset in which b lies.
+        // Fixme: do not restart offset search for every b.
+        int offset = 0;
+        int i = 0;
+        for (i = 0; i < nL; ++i) {
+            if (b < offset + lens[i]) {
+                break;
+            }
+
+            offset += lens[i];
         }
-        if (x_end >= (B * I))
-        {
-            x_end = B * I;
-        }
-        // cpy_length = 20-0 : 20
-        // Unsure which memcpy function to use on CUDA..
-        // Shrug, just write the loop...
-        int cpy_length = x_end - x_start;
-        for (int i=0; i<cpy_length; ++i)
-        {
-            // Write the region output[10:30] = X[0:20]
-            output[o_start+i] = X[x_start+i];
+
+        // Find the bounds of the sequence wherein b lies.
+        int seq_start = offset * I;
+        int seq_end = (offset + lens[i]) * I;
+
+        // Find the unconstrained window around b, which
+        // may be out of the sequence bounds.
+        int window_begin = (b * I) - (nW * I);
+        int window_end = (b * I) + (nW + 1) * I;
+
+        // Find the sequence-constrained window around b.
+        int x_begin = max(seq_start, window_begin);
+        int x_end = min(seq_end, window_end);
+        int n_elems = x_end - x_begin;
+
+        // If the left window is cut short, we want to
+        // start by the same amount in the output.
+        int out_offset = x_begin - window_begin;
+
+        for (int j = 0; j < n_elems; j++) {
+            output[(b * I * nF) + out_offset + j] = X[x_begin + j];
         }
     }
 }

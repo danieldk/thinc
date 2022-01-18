@@ -113,7 +113,7 @@ class CupyOps(Ops):
         The new sequence is constructed by concatenating nW preceding and succeeding
         vectors onto each column in the sequence, to extract a window of features.
         """
-        return _custom_kernels.seq2col(seq, nW)
+        return _custom_kernels.seq2col(seq, nW, lens)
 
     def backprop_seq2col(self, dY, nW):
         return _custom_kernels.backprop_seq2col(dY, nW)
