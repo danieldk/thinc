@@ -204,17 +204,37 @@ def test_seq2col_window_one(ops, X):
 
 
 @pytest.mark.parametrize("ops", XP_OPS)
-def test_seq2col_lens(ops):
-    X = ops.xp.arange(1.0, 13.0, dtype="float32").reshape(4, 3)
-    lens = ops.asarray1i([1, 2, 1])
+def test_seq2col_window_one_lens(ops):
+    X = ops.xp.arange(1.0, 16.0, dtype="float32").reshape(5, 3)
+    lens = ops.asarray1i([1, 3, 1])
     cols = ops.seq2col(X, 1, lens)
     ops.xp.testing.assert_allclose(
         ops.asarray2f(
             [
                 [0, 0, 0, 1, 2, 3, 0, 0, 0],
                 [0, 0, 0, 4, 5, 6, 7, 8, 9],
-                [4, 5, 6, 7, 8, 9, 0, 0, 0],
-                [0, 0, 0, 10, 11, 12, 0, 0, 0],
+                [4, 5, 6, 7, 8, 9, 10, 11, 12],
+                [7, 8, 9, 10, 11, 12, 0, 0, 0],
+                [0, 0, 0, 13, 14, 15, 0, 0, 0],
+            ]
+        ),
+        cols,
+    )
+
+
+@pytest.mark.parametrize("ops", XP_OPS)
+def test_seq2col_window_two_lens(ops):
+    X = ops.xp.arange(1.0, 16.0, dtype="float32").reshape(5, 3)
+    lens = ops.asarray1i([1, 3, 1])
+    cols = ops.seq2col(X, 2, lens)
+    ops.xp.testing.assert_allclose(
+        ops.asarray2f(
+            [
+                [0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                [0, 0, 0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0],
+                [4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 13, 14, 15, 0, 0, 0, 0, 0, 0],
             ]
         ),
         cols,
