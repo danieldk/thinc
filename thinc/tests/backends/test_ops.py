@@ -208,8 +208,7 @@ def test_seq2col_lens(ops):
     X = ops.xp.arange(1.0, 13.0, dtype="float32").reshape(4, 3)
     lens = ops.asarray1i([1, 2, 1])
     cols = ops.seq2col(X, 1, lens)
-    assert_equal(
-        cols,
+    ops.xp.testing.assert_allclose(
         ops.asarray2f(
             [
                 [0, 0, 0, 1, 2, 3, 0, 0, 0],
@@ -218,6 +217,7 @@ def test_seq2col_lens(ops):
                 [0, 0, 0, 10, 11, 12, 0, 0, 0],
             ]
         ),
+        cols,
     )
 
 
