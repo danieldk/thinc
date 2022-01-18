@@ -115,7 +115,7 @@ class CupyOps(Ops):
         """
         return _custom_kernels.seq2col(seq, nW, lens)
 
-    def backprop_seq2col(self, dY, nW):
+    def backprop_seq2col(self, dY, nW, lens=None):
         return _custom_kernels.backprop_seq2col(dY, nW)
 
     def reduce_mean(self, X, lengths):

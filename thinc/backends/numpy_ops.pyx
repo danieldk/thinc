@@ -182,7 +182,7 @@ class NumpyOps(Ops):
         else:
             return dX
 
-    def seq2col(self, const float[:, ::1] seq, int nW, const int[:] lens = None):
+    def seq2col(self, const float[:, ::1] seq, int nW, const int[:] lens=None):
         """Given an (M, N) sequence of vectors, return an (M, N*(nW*2+1))
         sequence. The new sequence is constructed by concatenating nW preceding
         and succeeding vectors onto each column in the sequence, to extract a
@@ -202,12 +202,21 @@ class NumpyOps(Ops):
         seq2col(<float*>cols.data, &seq[0,0], &lens[0], nW, B, I, nL)
         return cols
 
-    def backprop_seq2col(self, const float[:, ::1] dY, int nW):
+    def backprop_seq2col(self, const float[:, ::1] dY, int nW, const int[:] lens=None):
         cdef int B = dY.shape[0]
         cdef int nF = nW*2+1
         cdef int I = dY.shape[1] / nF
+
+        if lens is None:
+            lens = self.asarray1i([B])
+        else:
+            assert self.xp.all(self.xp.array(lens) >= 0), "All sequence lengths must be >= 0"
+            assert self.xp.sum(lens) == B, "The lengths must sum up to the batch length"
+        cdef int nL = lens.shape[0]
+
+
         cdef np.ndarray dX = self.alloc((B, I), dtype='float32')
-        backprop_seq2col(<float*>dX.data, &dY[0,0], B, I, nW)
+        backprop_seq2col(<float*>dX.data, &dY[0,0], &lens[0], B, I, nW, nL)
         return dX
 
     @cython.boundscheck(False)
@@ -435,7 +444,7 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
 
 
 cdef void backprop_seq2col(float* d_seqs,
-        const float* d_cols, int B, int I, int nW) nogil:
+        const float* d_cols, const int* L, int B, int I, int nW, int nL) nogil:
     # Here's what we're doing, if we had 2d indexing.
     #for i in range(B):
     #    d_seq[i] += d_cols[i-2, 4]
@@ -443,19 +452,36 @@ cdef void backprop_seq2col(float* d_seqs,
     #    d_seq[i] += d_cols[i, 2]
     #    d_seq[i] += d_cols[i+1, 1]
     #    d_seq[i] += d_cols[i+2, 0]
-    cdef int col_feat
-    nF = nW * 2 + 1
-    for i in range(B):
-        seq_row = i * I
-        col_feat = nF * I
-        for f in range(-nW, nW+1):
-            col_row = (i+f) * (I * nF)
-            col_feat -= I
-            if col_row >= 0 and (col_row < (B*I*nF)):
-                j = col_row + col_feat
-                if j >= 0 and (j+I) < (B*I*nF):
-                    VecVec.add_i(&d_seqs[seq_row],
-                        &d_cols[j], 1., I)
+
+    cdef int nF = nW * 2 + 1
+
+    cdef int i, j, seq_start, seq_end
+    cdef int offset = 0
+    for i in range(nL):
+        # Calculate the bounds of the next sequence.
+        seq_start = offset * I
+        seq_end = (offset + L[i]) * I
+
+        # Four-argument range loop only works with constant step.
+        j = seq_start
+        while j < seq_end:
+            # Find the unconstrained window around b, which
+            # may be out of the sequence bounds.
+            window_begin = j - (nW * I)
+            window_end = j + (nW + 1) * I
+
+            # Find the sequence-constrained window around b.
+            x_begin = max(seq_start, window_begin)
+            x_end = min(seq_end, window_end)
+            n_elems = x_end - x_begin
+
+            out_offset = x_begin - window_begin
+
+            VecVec.add_i(&d_seqs[x_begin], &d_cols[(j * nF) + out_offset], 1., n_elems)
+
+            j += I
+
+        offset += L[i]
 
 
 cdef void cpu_maxout(float* best__bo, int* which__bo,

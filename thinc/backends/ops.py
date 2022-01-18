@@ -167,13 +167,14 @@ class Ops:
         cols[:-nW, nW + 1 :] = self.reshape3f(seq[nW:], -1, nW, I)
         return self.reshape2f(cols, B, I * (2 * nW + 1))
 
-    def backprop_seq2col(self, dY: Floats2d, nW: int) -> Floats2d:
+    def backprop_seq2col(self, dY: Floats2d, nW: int, lens=None) -> Floats2d:
         """The reverse/backward operation of the `seq2col` function: calculate
         the gradient of the original `(M, N)` sequence, as a function of the
         gradient of the output `(M, N*(nW*2+1))` sequence.
         """
-        # This is a test implementation that only supports nW=1
+        # This is a test implementation that only supports nW=1 and lens=None
         assert nW == 1
+        assert lens == None
         nF = nW * 2 + 1
         B = dY.shape[0]
         I = dY.shape[1] // nF
