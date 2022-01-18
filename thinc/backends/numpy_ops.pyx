@@ -408,15 +408,19 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
     cdef int i, j, seq_start, seq_end
     cdef int offset = 0
     for i in range(nL):
+        # Calculate the bounds of the next sequence.
         seq_start = offset * I
         seq_end = (offset + L[i]) * I
 
         # Four-argument range loop only works with constant step.
         j = seq_start
         while j < seq_end:
+            # Find the unconstrained window around b, which
+            # may be out of the sequence bounds.
             window_begin = j - (nW * I)
             window_end = j + (nW + 1) * I
 
+            # Find the sequence-constrained window around b.
             x_begin = max(seq_start, window_begin)
             x_end = min(seq_end, window_end)
             n_elems = x_end - x_begin

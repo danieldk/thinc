@@ -53,7 +53,7 @@ void seq2col(float* output,
             offset += lens[i];
         }
 
-        // Find the bounds of the sequence wherein b lies.
+        // Calculate the bounds of the sequence wherein b lies.
         int seq_start = offset * I;
         int seq_end = (offset + lens[i]) * I;
 
