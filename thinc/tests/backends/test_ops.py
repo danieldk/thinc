@@ -275,6 +275,26 @@ def test_backprop_seq2col_window_one(ops, X):
     ops.xp.testing.assert_allclose(target, predicted, atol=0.001, rtol=0.001)
 
 
+@pytest.mark.parametrize("ops", [NumpyOps()])
+def test_backprop_seq2col_window_one_lens(ops):
+    d_y = ops.xp.arange(0.1, 4.6, step=0.1, dtype="float32").reshape(5, 9)
+    lens = ops.asarray1i([1, 3, 1])
+    d_seqs = ops.backprop_seq2col(d_y, 1, lens)
+
+    ops.xp.testing.assert_allclose(
+        ops.asarray2f(
+            [
+                [0.4, 0.5, 0.6],
+                [3.2, 3.4, 3.6],
+                [6.6, 6.9, 7.2],
+                [5.6, 5.8, 6.0],
+                [4.0, 4.1, 4.2],
+            ]
+        ),
+        d_seqs,
+    )
+
+
 @pytest.mark.parametrize("ops", XP_OPS)
 def test_seq2col_window_two(ops):
     seq = ops.asarray([[1.0], [2.0], [3.0], [4]], dtype="float32")
