@@ -225,27 +225,34 @@ void backprop_seq2col(float* d_seqs, const float* d_cols, const int* lens,
         }
 
         // Calculate the bounds of the sequence wherein b lies.
-        int seq_start = offset * I;
-        int seq_end = (offset + lens[i]) * I;
+        int seq_start = offset;
+        int seq_end = offset + lens[i];
 
         // Find the unconstrained window around b, which
         // may be out of the sequence bounds.
-        int window_begin = (b * I) - (nW * I);
-        int window_end = (b * I) + (nW + 1) * I;
+        int window_begin = b - nW;
+        int window_end = b + nW + 1;
 
         // Find the sequence-constrained window around b.
         int x_begin = max(seq_start, window_begin);
         int x_end = min(seq_end, window_end);
-        int n_elems = x_end - x_begin;
 
         // If the left window is cut short, we want to
         // start by the same amount in the output.
         int out_offset = x_begin - window_begin;
 
-        for (int j = 0; j < n_elems; j++) {
-            //float val = d_cols[(b * I * nF) + out_offset + j];
-            //printf("seq: %d, col: %d, val: %f\n", x_begin + j, (b * I * nF) + out_offset + j, val);
-            d_seqs[x_begin + j] += d_cols[(b * I * nF) + out_offset + j];
+        // In which contexts does b occur, given nw=1?
+        //
+        // position 0 in b - 1 (if present) <- window_begin
+        // position 1 in b
+        // position 2 in b + 1 (if present) <- window_end
+
+        for (int j = x_begin; j < x_end; ++j) {
+            int offset = (2 * nW) - (j - window_begin);
+            int start = (j * I * nF) + (offset * I);
+            for (int k = 0; k < I; ++k) {
+                d_seqs[(b*I + k)] += d_cols[start + k];
+            }
         }
     }
 }
