@@ -275,7 +275,7 @@ def test_backprop_seq2col_window_one(ops, X):
     ops.xp.testing.assert_allclose(target, predicted, atol=0.001, rtol=0.001)
 
 
-@pytest.mark.parametrize("ops", [NumpyOps()])
+@pytest.mark.parametrize("ops", XP_OPS)
 def test_backprop_seq2col_window_one_lens(ops):
     d_y = ops.xp.arange(0.1, 4.6, step=0.1, dtype="float32").reshape(5, 9)
     lens = ops.asarray1i([1, 3, 1])
@@ -292,6 +292,7 @@ def test_backprop_seq2col_window_one_lens(ops):
             ]
         ),
         d_seqs,
+        atol=1e-6,
     )
 
 
@@ -307,7 +308,7 @@ def test_seq2col_window_two(ops):
     assert_allclose(cols[3], [2.0, 3.0, 4.0, 0.0, 0.0])
 
 
-@pytest.mark.parametrize("ops", [NumpyOps()])
+@pytest.mark.parametrize("ops", XP_OPS)
 def test_backprop_seq2col_window_two_lens(ops):
     d_y = ops.xp.arange(0.1, 7.6, step=0.1, dtype="float32").reshape(5, 15)
     lens = ops.asarray1i([1, 3, 1])

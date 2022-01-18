@@ -475,6 +475,8 @@ cdef void backprop_seq2col(float* d_seqs,
             x_end = min(seq_end, window_end)
             n_elems = x_end - x_begin
 
+            # If the left window is cut short, we want to
+            # start by the same amount in the output.
             out_offset = x_begin - window_begin
 
             VecVec.add_i(&d_seqs[x_begin], &d_cols[(j * nF) + out_offset], 1., n_elems)

@@ -4,8 +4,8 @@
 // what grid parameters are used for the function.
 
 extern "C" __global__
-void seq2col(float* output,
-    const float* X, const int* lens, int nW, int B, int I, int nL)
+void seq2col(float* output, const float* X, const int* lens,
+        int nW, int B, int I, int nL)
 {
     // Let's say nW is 1 (it usually is). Then we want to take:
 
@@ -38,6 +38,7 @@ void seq2col(float* output,
     // * x_start=0, x_end=16 : (2-2) * 3, (2+2+1) * 3
     int _loop_start = blockIdx.x * blockDim.x + threadIdx.x;
     int _loop_stride = blockDim.x * gridDim.x;
+
     int nF = nW * 2 + 1;
     for (int b = _loop_start; b < B; b += _loop_stride)
     {
@@ -194,8 +195,8 @@ void reduce_max(float* maxes, int* which,
 }
 
 extern "C" __global__
-void backprop_seq2col(float* d_seqs,
-    const float* d_cols, int nW, int B, int I)
+void backprop_seq2col(float* d_seqs, const float* d_cols, const int* lens,
+        int nW, int B, int I, int nL)
 {
     // Here's what we're doing, if we had 2d indexing.
     //for i in range(B):
@@ -207,25 +208,44 @@ void backprop_seq2col(float* d_seqs,
 
     int _loop_start = blockIdx.x * blockDim.x + threadIdx.x;
     int _loop_stride = blockDim.x * gridDim.x;
+
     int nF = nW * 2 + 1;
-    int end_d_cols = B * I * nF;
     for (int b = _loop_start; b < B; b += _loop_stride)
     {
-        float* d_seqs_b = &d_seqs[b*I];
-        int col_feat = nF * I;
-        for (int f=-nW; f < (nW+1); ++f)
-        {
-            int col_row = (b+f) * (I*nF);
-            col_feat -= I;
-            if ((col_row >= 0) && (col_row < end_d_cols))
-            {
-                int start = col_row + col_feat;
-                if ((start >= 0) && ((start+I) < end_d_cols))
-                {
-                    for (int i=0; i < I; ++i)
-                        d_seqs_b[i] += d_cols[start+i];
-                }
+        // Find sequence offset in which b lies.
+        // Fixme: do not restart offset search for every b.
+        int offset = 0;
+        int i = 0;
+        for (i = 0; i < nL; ++i) {
+            if (b < offset + lens[i]) {
+                break;
             }
+
+            offset += lens[i];
+        }
+
+        // Calculate the bounds of the sequence wherein b lies.
+        int seq_start = offset * I;
+        int seq_end = (offset + lens[i]) * I;
+
+        // Find the unconstrained window around b, which
+        // may be out of the sequence bounds.
+        int window_begin = (b * I) - (nW * I);
+        int window_end = (b * I) + (nW + 1) * I;
+
+        // Find the sequence-constrained window around b.
+        int x_begin = max(seq_start, window_begin);
+        int x_end = min(seq_end, window_end);
+        int n_elems = x_end - x_begin;
+
+        // If the left window is cut short, we want to
+        // start by the same amount in the output.
+        int out_offset = x_begin - window_begin;
+
+        for (int j = 0; j < n_elems; j++) {
+            //float val = d_cols[(b * I * nF) + out_offset + j];
+            //printf("seq: %d, col: %d, val: %f\n", x_begin + j, (b * I * nF) + out_offset + j, val);
+            d_seqs[x_begin + j] += d_cols[(b * I * nF) + out_offset + j];
         }
     }
 }
