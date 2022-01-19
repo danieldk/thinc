@@ -356,6 +356,53 @@ def test_backprop_seq2col_window_two(ops):
     ops.xp.testing.assert_allclose(seq, expected, atol=0.001, rtol=0.001)
 
 
+@pytest.mark.skipif(CupyOps.xp is None, reason="needs GPU/CuPy")
+@pytest.mark.parametrize("nW", [1, 2])
+def test_large_seq2col_gpu_against_cpu(nW):
+    cupy_ops = CupyOps()
+    numpy_ops = NumpyOps()
+
+    # Use array with a large enough batch to require multiple
+    # CUDA grids.
+    batch_size = 128 * 128 * 2  # threads per block * blocks * 2
+    X = numpy_ops.xp.random.randn(batch_size * 2).astype("float32").reshape(-1, 2)
+    X_gpu = cupy_ops.asarray2f(X)
+
+    # Use somewhat interesting sequence lengths.
+    lens = numpy_ops.asarray1i([1, 4, 2, 1] * (batch_size // 8))
+    lens_gpu = cupy_ops.asarray1i(lens)
+
+    cols = numpy_ops.seq2col(X, nW=nW, lens=lens)
+    cols_gpu = cupy_ops.seq2col(X_gpu, nW=nW, lens=lens_gpu)
+
+    assert_allclose(cols, cols_gpu.get())
+
+
+@pytest.mark.skipif(CupyOps.xp is None, reason="needs GPU/CuPy")
+@pytest.mark.parametrize("nW", [1, 2])
+def test_large_backprop_seq2col_gpu_against_cpu(nW):
+    cupy_ops = CupyOps()
+    numpy_ops = NumpyOps()
+
+    # Use array with a large enough batch to require multiple
+    # CUDA grids.
+    batch_size = 128 * 128 * 2  # threads per block * blocks * 2
+    nF = 2 * nW + 1
+    d_cols = (
+        numpy_ops.xp.random.randn(batch_size * nF).astype("float32").reshape(-1, nF)
+    )
+    d_cols_gpu = cupy_ops.asarray2f(d_cols)
+
+    # Use somewhat interesting sequence lengths.
+    lens = numpy_ops.asarray1i([1, 4, 2, 1] * (batch_size // 8))
+    lens_gpu = cupy_ops.asarray1i(lens)
+
+    d_seqs = numpy_ops.backprop_seq2col(d_cols, nW=nW, lens=lens)
+    d_seqs_gpu = cupy_ops.backprop_seq2col(d_cols_gpu, nW=nW, lens=lens_gpu)
+
+    assert_allclose(d_seqs, d_seqs_gpu.get())
+
+
 @pytest.mark.parametrize("ops", ALL_OPS)
 @settings(max_examples=MAX_EXAMPLES, deadline=None)
 @given(X=strategies.arrays_BI())
