@@ -410,6 +410,9 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
     * x_start=-3, x_end=13 : (1-2) * 3, (1+2+1) * 3
     * x_start=0, x_end=16 : (2-2) * 3, (2+2+1) * 3
 
+    If lens > 1, then the sequence lengths dictate
+    the boundaries/padding rather than the begin/end
+    of X.
     '''
 
     nF = nW * 2 + 1
@@ -473,8 +476,8 @@ cdef void backprop_seq2col(float* d_seqs,
             out_offset = d_seqs_begin - window_begin
 
             VecVec.add_i(&d_seqs[d_seqs_begin * I],
-                    &d_cols[(j * nF * I) + (out_offset * I)],
-                    1., n_elems * I)
+                         &d_cols[(j * nF * I) + (out_offset * I)],
+                         1., n_elems * I)
 
         seq_start += L[i]
 

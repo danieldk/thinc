@@ -36,6 +36,10 @@ void seq2col(float* output, const float* X, const int* lens,
     // * x_start=-6, x_end=9 : (0-2) * 3, (0+2+1) * 3
     // * x_start=-3, x_end=13 : (1-2) * 3, (1+2+1) * 3
     // * x_start=0, x_end=16 : (2-2) * 3, (2+2+1) * 3
+    //
+    // If lens > 1, then the sequence lengths dictate
+    // the boundaries/padding rather than the begin/end
+    // of X.
     int _loop_start = blockIdx.x * blockDim.x + threadIdx.x;
     int _loop_stride = blockDim.x * gridDim.x;
 
