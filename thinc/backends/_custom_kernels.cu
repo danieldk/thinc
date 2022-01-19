@@ -234,15 +234,23 @@ void backprop_seq2col(float* d_seqs, const float* d_cols, const int* lens,
         int d_seqs_start = max(seq_start, window_start);
         int d_seqs_end = min(seq_end, window_end);
 
+
+        // The here update proceeds differently than the other seq2col
+        // implementations. We have to do all the updates for the b in this loop
+        // iteration, otherwise we get data races due to parallelism in CUDA.
+        //
         // A batch item b occurs, given nw=1, in:
         //
         // position 0 in b - 1 (if present) <- window_start
         // position 1 in b
         // position 2 in b + 1 (if present) <- window_end
-
+        //
+        // The following loop sums the gradients for those occurrences.
+        // b_w loops over [b - 1, b, b + 1] and computes the position
+        // of b within the column gradients of [b - 1 ... b + 1].
         for (int b_w = d_seqs_start; b_w < d_seqs_end; ++b_w) {
-            int offset = (2 * nW) - (b_w - window_start);
-            int start = (b_w * I * nF) + (offset * I);
+            int position = (2 * nW) - (b_w - window_start);
+            int start = (b_w * I * nF) + (position * I);
             for (int i = 0; i < I; ++i) {
                 d_seqs[(b*I + i)] += d_cols[start + i];
             }
