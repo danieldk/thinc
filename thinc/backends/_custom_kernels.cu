@@ -40,23 +40,21 @@ void seq2col(float* output, const float* X, const int* lens,
     int _loop_stride = blockDim.x * gridDim.x;
 
     int nF = nW * 2 + 1;
+
+    int seq = 0;
+    int seq_start = 0;
     for (int b = _loop_start; b < B; b += _loop_stride)
     {
-        // Find sequence offset in which b lies.
-        // Fixme: do not restart offset search for every b.
-        int offset = 0;
-        int i = 0;
-        for (i = 0; i < nL; ++i) {
-            if (b < offset + lens[i]) {
+        // Find sequence sequence in which b lies.
+        for (; seq < nL; ++seq) {
+            if (b < seq_start + lens[seq]) {
                 break;
             }
-
-            offset += lens[i];
+            seq_start += lens[seq];
         }
 
         // Calculate the bounds of the sequence wherein b lies.
-        int seq_start = offset ;
-        int seq_end = offset + lens[i];
+        int seq_end = seq_start + lens[seq];
 
         // Find the unconstrained window around b, which
         // may be out of the sequence bounds.
@@ -68,13 +66,13 @@ void seq2col(float* output, const float* X, const int* lens,
         int x_end = min(seq_end, window_end);
         int n_elems = x_end - x_start;
 
-        // If the left window is cut short, we want to
-        // start by the same amount in the output.
+        // If the left window is cut short, we want to start by
+        // the same amount in the output.
         int out_offset = x_start - window_start;
 
-        for (int j = 0; j < n_elems * I; j++) {
-            output[(b * I * nF) + (out_offset * I) + j] =
-                X[(x_start * I) + j];
+        for (int i = 0; i < n_elems * I; i++) {
+            output[(b * I * nF) + (out_offset * I) + i] =
+                X[(x_start * I) + i];
         }
     }
 }
@@ -211,23 +209,21 @@ void backprop_seq2col(float* d_seqs, const float* d_cols, const int* lens,
     int _loop_stride = blockDim.x * gridDim.x;
 
     int nF = nW * 2 + 1;
+    int seq = 0;
+    int seq_start = 0;
     for (int b = _loop_start; b < B; b += _loop_stride)
     {
         // Find sequence offset in which b lies.
         // Fixme: do not restart offset search for every b.
-        int offset = 0;
-        int i = 0;
-        for (i = 0; i < nL; ++i) {
-            if (b < offset + lens[i]) {
+        for (; seq < nL; ++seq) {
+            if (b < seq_start + lens[seq]) {
                 break;
             }
-
-            offset += lens[i];
+            seq_start += lens[seq];
         }
 
         // Calculate the bounds of the sequence wherein b lies.
-        int seq_start = offset;
-        int seq_end = offset + lens[i];
+        int seq_end = seq_start + lens[seq];
 
         // Find the unconstrained window around b, which
         // may be out of the sequence bounds.
@@ -238,21 +234,17 @@ void backprop_seq2col(float* d_seqs, const float* d_cols, const int* lens,
         int d_seqs_start = max(seq_start, window_start);
         int d_seqs_end = min(seq_end, window_end);
 
-        // If the left window is cut short, we want to
-        // start by the same amount in the output.
-        int out_offset = d_seqs_start - window_start;
-
         // A batch item b occurs, given nw=1, in:
         //
         // position 0 in b - 1 (if present) <- window_start
         // position 1 in b
         // position 2 in b + 1 (if present) <- window_end
 
-        for (int j = d_seqs_start; j < d_seqs_end; ++j) {
-            int offset = (2 * nW) - (j - window_start);
-            int start = (j * I * nF) + (offset * I);
-            for (int k = 0; k < I; ++k) {
-                d_seqs[(b*I + k)] += d_cols[start + k];
+        for (int b_w = d_seqs_start; b_w < d_seqs_end; ++b_w) {
+            int offset = (2 * nW) - (b_w - window_start);
+            int start = (b_w * I * nF) + (offset * I);
+            for (int i = 0; i < I; ++i) {
+                d_seqs[(b*I + i)] += d_cols[start + i];
             }
         }
     }
