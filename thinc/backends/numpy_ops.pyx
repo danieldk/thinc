@@ -412,10 +412,9 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
 
     '''
 
-    cdef int nF = nW * 2 + 1
+    nF = nW * 2 + 1
 
-    cdef int i, j, seq_start, seq_end, window_begin, window_end
-    cdef int offset = 0
+    offset = 0
     for i in range(nL):
         # Calculate the bounds of the next sequence.
         seq_start = offset
@@ -425,18 +424,18 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
         for j in range(seq_start, seq_end):
             # Find the unconstrained window around b, which
             # may be out of the sequence bounds.
-            window_begin = j - nW
+            window_start = j - nW
             window_end = j + nW + 1
 
             # Find the sequence-constrained window around b.
-            x_begin = max(seq_start, window_begin)
+            x_start = max(seq_start, window_start)
             x_end = min(seq_end, window_end)
-            n_elems = x_end - x_begin
+            n_elems = x_end - x_start
 
-            out_offset = x_begin - window_begin
+            out_offset = x_start - window_start
 
             memcpy(output + (j * nF * I) + (out_offset * I),
-                   X + (x_begin * I),
+                   X + (x_start * I),
                    n_elems * I * sizeof(output[0]))
 
         offset += L[i]
@@ -452,10 +451,9 @@ cdef void backprop_seq2col(float* d_seqs,
     #    d_seq[i] += d_cols[i+1, 1]
     #    d_seq[i] += d_cols[i+2, 0]
 
-    cdef int nF = nW * 2 + 1
+    nF = nW * 2 + 1
 
-    cdef int i, j, seq_start, seq_end, window_begin, window_end
-    cdef int offset = 0
+    offset = 0
     for i in range(nL):
         # Calculate the bounds of the next sequence.
         seq_start = offset
