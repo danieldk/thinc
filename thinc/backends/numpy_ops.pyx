@@ -414,11 +414,10 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
 
     nF = nW * 2 + 1
 
-    offset = 0
+    seq_start = 0
     for i in range(nL):
         # Calculate the bounds of the next sequence.
-        seq_start = offset
-        seq_end = offset + L[i]
+        seq_end = seq_start + L[i]
 
         # Four-argument range loop only works with constant step.
         for j in range(seq_start, seq_end):
@@ -438,7 +437,7 @@ cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, in
                    X + (x_start * I),
                    n_elems * I * sizeof(output[0]))
 
-        offset += L[i]
+        seq_start += L[i]
 
 
 cdef void backprop_seq2col(float* d_seqs,
@@ -453,11 +452,10 @@ cdef void backprop_seq2col(float* d_seqs,
 
     nF = nW * 2 + 1
 
-    offset = 0
+    seq_start = 0
     for i in range(nL):
         # Calculate the bounds of the next sequence.
-        seq_start = offset
-        seq_end = offset + L[i]
+        seq_end = seq_start + L[i]
 
         for j in range(seq_start, seq_end):
             # Find the unconstrained window around b, which
@@ -478,7 +476,7 @@ cdef void backprop_seq2col(float* d_seqs,
                     &d_cols[(j * nF * I) + (out_offset * I)],
                     1., n_elems * I)
 
-        offset += L[i]
+        seq_start += L[i]
 
 
 cdef void cpu_maxout(float* best__bo, int* which__bo,
