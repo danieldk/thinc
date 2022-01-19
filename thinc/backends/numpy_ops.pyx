@@ -191,11 +191,7 @@ class NumpyOps(Ops):
         cdef int B = seq.shape[0]
         cdef int I = seq.shape[1]
 
-        if lens is None:
-            lens = self.asarray1i([B])
-        else:
-            assert self.xp.all(self.xp.array(lens) >= 0), "All sequence lengths must be >= 0"
-            assert self.xp.sum(lens) == B, "The lengths must sum up to the batch length"
+        lens = check_seq2col_lens(self, lens, B)
         cdef int nL = lens.shape[0]
 
         cdef np.ndarray cols = self.alloc((B, (2*nW + 1) * I), dtype="float32")
@@ -207,13 +203,8 @@ class NumpyOps(Ops):
         cdef int nF = nW*2+1
         cdef int I = dY.shape[1] / nF
 
-        if lens is None:
-            lens = self.asarray1i([B])
-        else:
-            assert self.xp.all(self.xp.array(lens) >= 0), "All sequence lengths must be >= 0"
-            assert self.xp.sum(lens) == B, "The lengths must sum up to the batch length"
+        lens = check_seq2col_lens(self, lens, B)
         cdef int nL = lens.shape[0]
-
 
         cdef np.ndarray dX = self.alloc((B, I), dtype='float32')
         backprop_seq2col(<float*>dX.data, &dY[0,0], &lens[0], B, I, nW, nL)
@@ -376,6 +367,16 @@ class NumpyOps(Ops):
         assert out_.shape[1] == D
         cpu_position_encode(<float*>out_.data, period, N, D)
         return out_
+
+
+def check_seq2col_lens(ops, lens, B):
+    if lens is None:
+        lens = ops.asarray1i([B])
+    else:
+        assert ops.xp.all(ops.xp.array(lens) >= 0), "All sequence lengths must be >= 0"
+        assert ops.xp.sum(lens) == B, "The lengths must sum up to the batch length"
+
+    return lens
 
 
 cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, int I, int nL) nogil:
