@@ -182,6 +182,28 @@ class NumpyOps(Ops):
         else:
             return dX
 
+    def swish(self, np.ndarray X, inplace=False) -> np.ndarray:
+        cdef np.ndarray Y
+        if X.dtype == "float32" and not inplace:
+            Y = self.xp.empty_like(X)
+            cpu_swish(<float*>Y.data, <const float*>X.data, 17.0, X.size)
+            return Y
+        else:
+            return super().swish(X, inplace=inplace)
+
+    def backprop_swish(
+        self, np.ndarray dY, np.ndarray X, np.ndarray Y, inplace: bool = False
+    ) -> np.ndarray:
+        cdef np.ndarray dX
+        if X.dtype == "float32" and Y.dtype == "float32" and dY.dtype == "float32" \
+           and not inplace:
+            dX = self.xp.empty_like(X)
+            cpu_backprop_swish(<float *>dX.data, <const float *>dY.data, <const float *>X.data, 17.0, X.size)
+            return dX
+        else:
+            return super().backprop_swish(dY, X, Y, inplace=inplace)
+
+
     def seq2col(self, const float[:, ::1] seq, int nW, *, const int[::1] lengths=None):
         """Given an (M, N) sequence of vectors, return an (M, N*(nW*2+1))
         sequence. The new sequence is constructed by concatenating nW preceding
@@ -622,6 +644,20 @@ cdef void cpu_backprop_mish(weight_t* dX,
             omega = (4. * (x+1)) + (4 * exp_2x) + exp_3x + exp_x * (4.*x+6)
             delta = 2. * exp_x + exp_2x + 2.
             dX[i] = dY[i] * ((exp_x * omega) / (delta * delta))
+
+
+cdef void cpu_swish(weight_t* Y, const weight_t* X, float threshold, int N) nogil:
+    for i in range(N):
+        if X[i] >= threshold:
+            Y[i] = X[i]
+        elif X[i] <= -threshold:
+            Y[i] = 0.0
+        else:
+            Y[i] = X[i] * sigmoid(X[i])
+
+
+cdef void cpu_backprop_swish(weight_t* dX, const weight_t* dY, const weight_t *X, float threshold, int N) nogil:
+    pass
 
 
 cdef cpu_floats_ptr2array(float* ptr, shape):

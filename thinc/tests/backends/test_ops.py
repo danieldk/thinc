@@ -941,7 +941,7 @@ def test_ngrams():
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("torch_func", TORCH_FUNCS)
 @settings(max_examples=MAX_EXAMPLES, deadline=None)
-@given(x=strategies.floats(min_value=-5, max_value=5))
+@given(x=strategies.floats(min_value=-20, max_value=20))
 def test_compare_activations_to_torch(ops, dtype, x, torch_func):
     import torch
 
@@ -970,6 +970,7 @@ def test_compare_activations_to_torch(ops, dtype, x, torch_func):
         assert ops.xp.isclose(
             dx_thinc,
             backward(dY=dY_thinc_inplace, Y=y_thinc, X=x_thinc, inplace=True),
+            atol=1e-06
         )
         assert ops.xp.isclose(x_torch.grad.item(), float(dx_thinc), atol=1e-06)
     else:
