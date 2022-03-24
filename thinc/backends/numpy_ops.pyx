@@ -94,20 +94,21 @@ class NumpyOps(Ops):
 
     def relu(self, np.ndarray X, inplace=False):
         cdef np.ndarray Y
-        cdef weight_t* data
-        cdef size = X.size
-        if X.dtype == "float32":
-            if inplace:
-                Y = X
-            else:
-                Y = X.copy()
-            data = <weight_t*>Y.data
-            for i in range(size):
-                if data[i] < 0:
-                    data[i] = 0.
-            return Y
+
+        if inplace:
+            Y = X
         else:
-            return super().relu(X, inplace)
+            Y = numpy.array(X)
+
+        if X.dtype == "float32":
+            cpu_relu(<float *>Y.data, <int>Y.size)
+        elif X.dtype == "float64":
+            cpu_relu(<double *>Y.data, <int>Y.size)
+        else:
+            return super().relu(X, inplace=inplace)
+
+        return Y
+
 
     def backprop_relu(self, np.ndarray dY, np.ndarray Y, inplace=False):
         _check_compatible_shape(dY, Y)
@@ -159,17 +160,24 @@ class NumpyOps(Ops):
         dX, d_params = backprop_lstm(dY, lengths, params, fwd_state)
         return dX, d_params
 
-    def maxout(self, const float[:, :, ::1] X):
+    def maxout(self, reals3d_ft X):
         cdef Pool mem = Pool()
         cdef int B = X.shape[0]
         cdef int O = X.shape[1]
         cdef int P = X.shape[2]
 
-        cdef np.ndarray best = numpy.zeros((B, O), dtype='float32', order='C')
-        cdef np.ndarray which = numpy.zeros((B, O), dtype='int32', order='C')
-        if len(X) > 0:
-            cpu_maxout(<float*>best.data, <int*>which.data,
-                &X[0, 0, 0], B, O, P)
+        cdef np.ndarray best
+        cdef np.ndarray which = numpy.empty(shape=(B, O), dtype='int32', order='C')
+        if reals3d_ft is float3d_t:
+            best = numpy.empty(shape=(B, O), dtype="float32", order='C')
+            if len(X) > 0:
+                cpu_maxout(<float*>best.data, <int*>which.data,
+                    &X[0, 0, 0], B, O, P)
+        else:
+            best = numpy.empty(shape=(B, O), dtype="float64", order='C')
+            if len(X) > 0:
+                cpu_maxout(<double*>best.data, <int*>which.data,
+                    &X[0, 0, 0], B, O, P)
         return best, which
 
     def backprop_maxout(self, const float[:, ::1] dY, int[:, ::1] which, int P):
@@ -183,15 +191,21 @@ class NumpyOps(Ops):
 
     def mish(self, np.ndarray X, threshold=20.0, inplace: bool = False):
         cdef np.ndarray Y
-        if X.dtype == "float32":
-            if inplace:
-                Y = X
-            else:
-                Y = self.xp.empty_like(X)
-            cpu_mish(<float*>Y.data, <float *>X.data, threshold, X.size)
-            return Y
+
+        if inplace:
+            Y = X
         else:
-            return super().mish(X, threshold, inplace)
+            Y = X.copy()
+
+        if X.dtype == "float32":
+            cpu_mish(<float *>Y.data, <int>Y.size, <float>threshold)
+        elif X.dtype == "float64":
+            cpu_mish(<double *>Y.data, <int>Y.size, <double>threshold)
+        else:
+            return super().relu(X, inplace=inplace)
+
+        return Y
+
 
     def backprop_mish(self, np.ndarray dY, np.ndarray X, threshold=20.0, inplace=False):
         _check_compatible_shape(dY, X)
@@ -518,13 +532,6 @@ cdef void backprop_seq2col(float* d_seqs,
         seq_start += L[i]
 
 
-cdef void cpu_maxout(float* best__bo, int* which__bo,
-        const float* cands__bop, int B, int O, int P) nogil:
-    for i in range(B*O):
-        which__bo[i] = Vec.arg_max(&cands__bop[i*P], P)
-        best__bo[i] = cands__bop[i*P + which__bo[i]]
-
-
 cdef int cpu_backprop_maxout(float* dX__bop,
         const float* dX__bo, const int* which__bo, int B, int O, int P) nogil except -1:
     for b in range(B):
@@ -630,15 +637,6 @@ cdef void cpu_update_averages(weight_t* ema,
     cdef int i
     for i in range(nr_weight): # num_threads=4, schedule='static'):
         ema[i] -= one_minus_decay * (ema[i] - weights[i])
-
-
-cdef void cpu_mish(weight_t* Y, const weight_t* X, float threshold, int N) nogil:
-    cdef float one = 1.
-    for i in range(N):
-        if X[i] >= threshold:
-            Y[i] = X[i]
-        else:
-            Y[i] = X[i] * tanhf(logf(one + expf(X[i])))
 
 
 cdef void cpu_backprop_mish(weight_t* dX,
