@@ -726,8 +726,9 @@ def test_flatten_unflatten_roundtrip(cpu_ops, X):
 
 
 @pytest.mark.parametrize("ops", ALL_OPS)
-def test_reduce_sum(ops):
-    m = ops.xp.zeros((19, 5), dtype="f")
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
+def test_reduce_sum(ops, dtype):
+    m = ops.xp.zeros((19, 5), dtype=dtype)
     m += 1
     lengths = ops.xp.array([5, 5, 3, 6], dtype="i")
     output = ops.reduce_sum(m, lengths)
@@ -749,7 +750,8 @@ def test_backprop_fails_with_incorrect_length(ops, dtype):
         )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_reduce_max_sm(ops, dtype):
     X = ops.xp.zeros((6, 3), dtype=dtype)
     X += ops.xp.random.uniform(-1, 1, X.shape)
@@ -763,7 +765,8 @@ def test_reduce_max_sm(ops, dtype):
         start += length
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_reduce_max(ops, dtype):
     m = ops.xp.zeros((19, 5), dtype=dtype)
     m += ops.xp.random.uniform(-1, 1, m.shape)
@@ -820,7 +823,8 @@ def test_backprop_reduce_max(ops, dtype):
         )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_reduce_mean(ops, dtype):
     X = ops.asarray2f(
         [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [1.0, 2], [3.0, 4.0]], dtype=dtype
