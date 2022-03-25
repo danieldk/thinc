@@ -161,7 +161,6 @@ class NumpyOps(Ops):
         return dX, d_params
 
     def maxout(self, reals3d_ft X):
-        cdef Pool mem = Pool()
         cdef int B = X.shape[0]
         cdef int O = X.shape[1]
         cdef int P = X.shape[2]
@@ -265,33 +264,43 @@ class NumpyOps(Ops):
             MurmurHash3_x86_128_uint64(ids[i], seed, &dest[i*4])
         return keys
 
-    def reduce_mean(self, const float[:, ::1] X, int[::1] lengths):
+
+    def reduce_mean(self, reals2d_ft X, int[::1] lengths):
         cdef int B = lengths.shape[0]
         cdef int O = X.shape[1]
         cdef int T = X.shape[0]
+        cdef np.ndarray means
 
-        cdef Pool mem = Pool()
         assert B != 0
         assert O != 0
-        means = <float*>mem.alloc(B * O, sizeof(float))
 
-        cpu_reduce_mean(means,
-            &X[0, 0], &lengths[0], B, T, O)
-        return cpu_floats_ptr2array(means, (B, O))
+        if reals2d_ft is float2d_t:
+            means = numpy.zeros(shape=(B, O), dtype="float32")
+            cpu_reduce_mean(<float *>means.data, &X[0, 0], &lengths[0], B, T, O)
+        else:
+            means = numpy.zeros(shape=(B, O), dtype="float64")
+            cpu_reduce_mean(<double *>means.data, &X[0, 0], &lengths[0], B, T, O)
 
-    def reduce_sum(self, const float[:, ::1] X, int[::1] lengths):
+        return means
+
+
+    def reduce_sum(self, reals2d_ft X, int[::1] lengths):
         cdef int B = lengths.shape[0]
         cdef int O = X.shape[1]
         cdef int T = X.shape[0]
+        cdef np.ndarray sums
 
-        cdef Pool mem = Pool()
         assert B != 0
         assert O != 0
-        sums = <float*>mem.alloc(B * O, sizeof(float))
 
-        cpu_reduce_sum(sums,
-            &X[0, 0], &lengths[0], B, T, O)
-        return cpu_floats_ptr2array(sums, (B, O))
+        if reals2d_ft is float2d_t:
+            sums = numpy.zeros(shape=(B, O), dtype="float32")
+            cpu_reduce_sum(<float *>sums.data, &X[0, 0], &lengths[0], B, T, O)
+        else:
+            sums = numpy.zeros(shape=(B, O), dtype="float64")
+            cpu_reduce_sum(<double *>sums.data, &X[0, 0], &lengths[0], B, T, O)
+
+        return sums
 
     def backprop_reduce_mean(self, const float[:, ::1] d_means, int[::1] lengths):
         cdef int B = lengths.shape[0]
@@ -328,23 +337,24 @@ class NumpyOps(Ops):
             &d_sums[0,0], &lengths[0], B, T, O)
         return cpu_floats_ptr2array(dX, (T, O))
 
-    def reduce_max(self, const float[:, ::1] X, const int[::1] lengths):
+    def reduce_max(self, reals2d_ft X, int[::1] lengths):
         cdef int B = lengths.shape[0]
         cdef int O = X.shape[1]
         cdef int T = X.shape[0]
+        cdef np.ndarray maxes
+        cdef np.ndarray which = numpy.zeros(shape=(B, O), dtype="i")
 
-        cdef Pool mem = Pool()
         assert B != 0
         assert O != 0
-        maxes = <float*>mem.alloc(B * O, sizeof(float))
-        which = <int*>mem.alloc(B * O, sizeof(int))
 
-        cpu_reduce_max(maxes, which,
-            &X[0, 0], &lengths[0], B, T, O)
+        if reals2d_ft is float2d_t:
+            maxes = numpy.zeros(shape=(B, O), dtype="float32")
+            cpu_reduce_max(<float*>maxes.data, <int*>which.data, &X[0, 0], &lengths[0], B, T, O)
+        else:
+            maxes = numpy.zeros(shape=(B, O), dtype="float64")
+            cpu_reduce_max(<double*>maxes.data, <int*>which.data, &X[0, 0], &lengths[0], B, T, O)
 
-        cdef np.ndarray py_best = cpu_floats_ptr2array(maxes, (B, O))
-        cdef np.ndarray py_which = cpu_ints_ptr2array(which, (B, O))
-        return py_best, py_which
+        return maxes, which
 
     def backprop_reduce_max(self, const float[:, ::1] d_maxes,
             const int[:, ::1] which, const int[::1] lengths):
@@ -670,28 +680,6 @@ cdef cpu_ints_ptr2array(int* ptr, shape):
     return py_out
 
 
-cdef int cpu_reduce_mean(float* means__bo,
-        const float* X__to, const int* lengths__b,
-        int B, int T, int O) nogil except -1:
-    '''Compute means of a batch of concatenated sequences, using the lengths.'''
-    cdef float scale = 0.
-    for length in lengths__b[:B]:
-        T -= length
-        if length == 0:
-            continue
-        elif length < 0:
-            raise ValueError(f"all sequence lengths must be >= 0, was {length}")
-        elif T < 0:
-            raise IndexError("lengths must sum up to the number of rows")
-
-        scale = 1. / length
-        for _ in range(length):
-            VecVec.add_i(means__bo,
-                X__to, scale, O)
-            X__to += O
-        means__bo += O
-
-
 cdef void cpu_backprop_reduce_mean(float* dX__to,
         const float* d_means__bo, const int* lengths__b,
         int B, int T, int O) nogil:
@@ -703,26 +691,6 @@ cdef void cpu_backprop_reduce_mean(float* dX__to,
                 d_means__bo, scale, O)
             dX__to += O
         d_means__bo += O
-
-
-cdef int cpu_reduce_sum(float* sums__bo,
-        const float* X__to, const int* lengths__b,
-        int B, int T, int O) nogil except -1:
-    '''Compute sums of a batch of concatenated sequences, using the lengths.'''
-    for length in lengths__b[:B]:
-        T -= length
-        if length == 0:
-            continue
-        elif length < 0:
-            raise ValueError(f"all sequence lengths must be >= 0, was {length}")
-        elif T < 0:
-            raise IndexError("lengths must sum up to the number of rows")
-
-        for _ in range(length):
-            VecVec.add_i(sums__bo,
-                X__to, 1.0, O)
-            X__to += O
-        sums__bo += O
 
 
 cdef int cpu_backprop_reduce_sum(float* dX__to,
@@ -741,33 +709,6 @@ cdef int cpu_backprop_reduce_sum(float* dX__to,
                 d_sums__bo, 1.0, O)
             dX__to += O
         d_sums__bo += O
-
-
-cdef int cpu_reduce_max(float* maxes__bo, int* which__bo,
-        const float* X__to, const int* lengths__b,
-        int B, int T, int O) nogil except -1:
-    '''Compute maxes of a batch of concatenated sequences, using the lengths.'''
-    cdef float scale = 0.
-    for length in lengths__b[:B]:
-        T -= length
-        if length == 0:
-            continue
-        elif length < 0:
-            raise ValueError(f"all sequence lengths must be >= 0, was {length}")
-        elif T < 0:
-            raise IndexError("lengths must sum up to the number of rows")
-
-        memcpy(maxes__bo, X__to, O * sizeof(maxes__bo[0]))
-        memset(which__bo, 0, O * sizeof(which__bo[0]))
-        X__to += O
-        for i in range(1, length):
-            for j in range(O):
-                if X__to[j] > maxes__bo[j]:
-                    maxes__bo[j] = X__to[j]
-                    which__bo[j] = i
-            X__to += O
-        maxes__bo += O
-        which__bo += O
 
 
 cdef int cpu_backprop_reduce_max(float* dX__to,
