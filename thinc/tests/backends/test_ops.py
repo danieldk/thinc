@@ -252,7 +252,8 @@ def test_seq2col_window_one(ops, X):
     ops.xp.testing.assert_allclose(target, predicted, atol=0.001, rtol=0.001)
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_seq2col_lengths_all_zero(ops, dtype):
     # Empty batch
     ops.xp.testing.assert_allclose(
@@ -296,7 +297,8 @@ def test_seq2col_lengths_all_zero(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_seq2col_lengths_zero_first_last(ops, dtype):
     cols_check = ops.asarray2f(
         [
@@ -343,7 +345,8 @@ def test_seq2col_lengths_zero_first_last(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_seq2col_lengths_zero_between(ops, dtype):
     cols_check = ops.asarray2f(
         [
@@ -410,7 +413,8 @@ def test_seq2col_lengths_zero_between(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_seq2col_window_one_lengths(ops, dtype):
     X = ops.xp.arange(1.0, 16.0, dtype=dtype).reshape(5, 3)
     lengths = ops.asarray1i([1, 3, 1])
@@ -430,7 +434,8 @@ def test_seq2col_window_one_lengths(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_seq2col_window_two_lengths(ops, dtype):
     X = ops.xp.arange(1.0, 16.0, dtype=dtype).reshape(5, 3)
     lengths = ops.asarray1i([1, 3, 1])
@@ -506,7 +511,8 @@ def test_backprop_seq2col_window_one_lengths(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_seq2col_window_two(ops, dtype):
     seq = ops.asarray([[1.0], [2.0], [3.0], [4]], dtype=dtype)
     cols = ops.seq2col(seq, 2)
@@ -518,7 +524,8 @@ def test_seq2col_window_two(ops, dtype):
     assert_allclose(cols[3], [2.0, 3.0, 4.0, 0.0, 0.0])
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_seq2col_window_two_lengths(ops, dtype):
     d_y = ops.xp.arange(0.1, 7.6, step=0.1, dtype=dtype).reshape(5, 15)
     lengths = ops.asarray1i([1, 3, 1])
@@ -539,7 +546,8 @@ def test_backprop_seq2col_window_two_lengths(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_seq2col_window_two(ops, dtype):
     cols = ops.asarray(
         [

@@ -220,7 +220,7 @@ class NumpyOps(Ops):
         else:
             return super().backprop_mish(dY, X, threshold, inplace)
 
-    def seq2col(self, const float[:, ::1] seq, int nW, *, const int[::1] lengths=None):
+    def seq2col(self, reals2d_ft seq, int nW, *, int[::1] lengths=None):
         """Given an (M, N) sequence of vectors, return an (M, N*(nW*2+1))
         sequence. The new sequence is constructed by concatenating nW preceding
         and succeeding vectors onto each column in the sequence, to extract a
@@ -232,14 +232,19 @@ class NumpyOps(Ops):
         lengths = check_seq2col_lengths(self, lengths, B)
         cdef int nL = lengths.shape[0]
 
-        cdef np.ndarray cols = self.alloc((B, (2*nW + 1) * I), dtype="float32")
-
-        if seq.size != 0 and lengths.size != 0:
-            seq2col(<float*>cols.data, &seq[0,0], &lengths[0], nW, B, I, nL)
+        cdef np.ndarray cols
+        if reals2d_ft is float2d_t:
+            cols = self.alloc((B, (2*nW + 1) * I), dtype="float32")
+            if seq.size != 0 and lengths.size != 0:
+                seq2col(<float*>cols.data, &seq[0,0], &lengths[0], nW, B, I, nL)
+        else:
+            cols = self.alloc((B, (2*nW + 1) * I), dtype="float64")
+            if seq.size != 0 and lengths.size != 0:
+                seq2col(<double*>cols.data, &seq[0,0], &lengths[0], nW, B, I, nL)
 
         return cols
 
-    def backprop_seq2col(self, const float[:, ::1] dY, int nW, *, const int[::1] lengths=None):
+    def backprop_seq2col(self, reals2d_ft dY, int nW, *, int[::1] lengths=None):
         cdef int B = dY.shape[0]
         cdef int nF = nW*2+1
         cdef int I = dY.shape[1] / nF
@@ -247,9 +252,16 @@ class NumpyOps(Ops):
         lengths = check_seq2col_lengths(self, lengths, B)
         cdef int nL = lengths.shape[0]
 
-        cdef np.ndarray dX = self.alloc((B, I), dtype='float32')
-        if dY.size != 0 and lengths.size != 0:
-            backprop_seq2col(<float*>dX.data, &dY[0,0], &lengths[0], B, I, nW, nL)
+        cdef np.ndarray dX
+        if reals2d_ft is float2d_t:
+            dX = self.alloc((B, I), dtype='float32')
+            if dY.size != 0 and lengths.size != 0:
+                backprop_seq2col(<float*>dX.data, &dY[0,0], &lengths[0], B, I, nW, nL)
+        else:
+            dX = self.alloc((B, I), dtype='float64')
+            if dY.size != 0 and lengths.size != 0:
+                backprop_seq2col(<double*>dX.data, &dY[0,0], &lengths[0], B, I, nW, nL)
+
         return dX
 
     @cython.boundscheck(False)
@@ -436,110 +448,6 @@ def check_seq2col_lengths(ops, lengths, B):
         assert ops.xp.sum(lengths) == B, "The lengths must sum up to the batch length"
 
     return lengths
-
-
-cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, int I, int nL) nogil:
-    '''
-    Let's say nW is 1 (it usually is). Then we want to take:
-
-    1a 1b 1c
-    2a 2b 2c
-    3a 3b 3c
-
-    And make
-
-    __ __ __ 1a 1b 1c 2a 2b 2c
-    1a 1b 1c 2a 2b 2c 3a 3b 3c
-    2a 2b 2c 3a 3b 3c __ __ __
-
-    Where __ is padding.
-
-    Now let's say nW is 2. Then we want to take:
-
-    1a 1b 1c
-    2a 2b 2c
-    3a 3b 3c
-
-    And make
-
-    __ __ __ __ __ __ 1a 1b 1c 2a 2b 2c 3a 3b 3c
-    __ __ __ 1a 1b 1c 2a 2b 2c 3a 3b 3c __ __ __
-    1a 1b 1c 2a 2b 2c 3a 3b 3c __ __ __ __ __ __
-
-    * x_start=-6, x_end=9 : (0-2) * 3, (0+2+1) * 3
-    * x_start=-3, x_end=13 : (1-2) * 3, (1+2+1) * 3
-    * x_start=0, x_end=16 : (2-2) * 3, (2+2+1) * 3
-
-    If lengths > 1, then the sequence lengths dictate
-    the boundaries/padding rather than the begin/end
-    of X.
-    '''
-
-    nF = nW * 2 + 1
-
-    seq_start = 0
-    for i in range(nL):
-        # Calculate the bounds of the next sequence.
-        seq_end = seq_start + L[i]
-
-        # Four-argument range loop only works with constant step.
-        for j in range(seq_start, seq_end):
-            # Find the unconstrained window around b, which
-            # may be out of the sequence bounds.
-            window_start = j - nW
-            window_end = j + nW + 1
-
-            # Find the sequence-constrained window around b.
-            x_start = max(seq_start, window_start)
-            x_end = min(seq_end, window_end)
-            n_elems = x_end - x_start
-
-            out_offset = x_start - window_start
-
-            memcpy(output + (j * nF * I) + (out_offset * I),
-                   X + (x_start * I),
-                   n_elems * I * sizeof(output[0]))
-
-        seq_start += L[i]
-
-
-cdef void backprop_seq2col(float* d_seqs,
-        const float* d_cols, const int* L, int B, int I, int nW, int nL) nogil:
-    # Here's what we're doing, if we had 2d indexing.
-    #for i in range(B):
-    #    d_seq[i] += d_cols[i-2, 4]
-    #    d_seq[i] += d_cols[i-1, 3]
-    #    d_seq[i] += d_cols[i, 2]
-    #    d_seq[i] += d_cols[i+1, 1]
-    #    d_seq[i] += d_cols[i+2, 0]
-
-    nF = nW * 2 + 1
-
-    seq_start = 0
-    for i in range(nL):
-        # Calculate the bounds of the next sequence.
-        seq_end = seq_start + L[i]
-
-        for j in range(seq_start, seq_end):
-            # Find the unconstrained window around b, which
-            # may be out of the sequence bounds.
-            window_begin = j - nW
-            window_end = j + nW + 1
-
-            # Find the sequence-constrained window around b.
-            d_seqs_begin = max(seq_start, window_begin)
-            d_seqs_end = min(seq_end, window_end)
-            n_elems = d_seqs_end - d_seqs_begin
-
-            # If the left window is cut short, we want to
-            # start by the same amount in the output.
-            out_offset = d_seqs_begin - window_begin
-
-            VecVec.add_i(&d_seqs[d_seqs_begin * I],
-                         &d_cols[(j * nF * I) + (out_offset * I)],
-                         1., n_elems * I)
-
-        seq_start += L[i]
 
 
 cdef int cpu_backprop_maxout(float* dX__bop,

@@ -1,7 +1,9 @@
 #ifndef CPU_KERNELS_H_
 #define CPU_KERNELS_H_
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -165,6 +167,120 @@ void cpu_relu(A* X, L N)
         if (X[i] < 0) {
             X[i] = 0.0;
         }
+    }
+}
+
+template <typename A, typename L>
+void seq2col(A* output, const A* X, const L* lengths, L nW, L B, L I, L nL) {
+    // Let's say nW is 1 (it usually is). Then we want to take:
+
+    // 1a 1b 1c
+    // 2a 2b 2c
+    // 3a 3b 3c
+
+    // And make
+
+    // __ __ __ 1a 1b 1c 2a 2b 2c
+    // 1a 1b 1c 2a 2b 2c 3a 3b 3c
+    // 2a 2b 2c 3a 3b 3c __ __ __
+
+    // Where __ is padding.
+
+    // Now let's say nW is 2. Then we want to take:
+
+    // 1a 1b 1c
+    // 2a 2b 2c
+    // 3a 3b 3c
+
+    // And make
+
+    // __ __ __ __ __ __ 1a 1b 1c 2a 2b 2c 3a 3b 3c
+    // __ __ __ 1a 1b 1c 2a 2b 2c 3a 3b 3c __ __ __
+    // 1a 1b 1c 2a 2b 2c 3a 3b 3c __ __ __ __ __ __
+
+    // * x_start=-6, x_end=9 : (0-2) * 3, (0+2+1) * 3
+    // * x_start=-3, x_end=13 : (1-2) * 3, (1+2+1) * 3
+    // * x_start=0, x_end=16 : (2-2) * 3, (2+2+1) * 3
+
+    // If lengths > 1, then the sequence lengths dictate
+    // the boundaries/padding rather than the begin/end
+    // of X.
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
+    L nF = nW * 2 + 1;
+
+    L seq_start = 0;
+    for (L i = 0; i < nL; ++i) {
+        // Calculate the bounds of the next sequence.
+        L seq_end = seq_start + lengths[i];
+
+        for (L j = seq_start; j < seq_end; ++j) {
+            // Find the unconstrained window around b, which
+            // may be out of the sequence bounds.
+            L window_start = j - nW;
+            L window_end = j + nW + 1;
+
+            // Find the sequence-constrained window around b.
+            L x_start = std::max(seq_start, window_start);
+            L x_end = std::min(seq_end, window_end);
+            L n_elems = x_end - x_start;
+
+
+            L out_offset = x_start - window_start;
+
+            std::memcpy(output + (j * nF * I) + (out_offset * I),
+                   X + (x_start * I),
+                   n_elems * I * sizeof(output[0]));
+        }
+
+        seq_start += lengths[i];
+    }
+}
+
+
+template <typename A, typename L>
+void backprop_seq2col(A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L nW, L nL) {
+    // here's what we're doing, if we had 2d indexing.
+    // for i in range(b):
+    //     d_seq[i] += d_cols[i-2, 4]
+    //     d_seq[i] += d_cols[i-1, 3]
+    //     d_seq[i] += d_cols[i, 2]
+    //     d_seq[i] += d_cols[i+1, 1]
+    //     d_seq[i] += d_cols[i+2, 0]
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
+    L nF = nW * 2 + 1;
+
+    L seq_start = 0;
+    for (L i = 0; i < nL; ++i) {
+        // Calculate the bounds of the next sequence.
+        L seq_end = seq_start + lengths[i];
+
+        for (L j = seq_start; j < seq_end; ++j) {
+            // Find the unconstrained window around b, which
+            // may be out of the sequence bounds.
+            L window_begin = j - nW;
+            L window_end = j + nW + 1;
+
+            // Find the sequence-constrained window around b.
+            L d_seqs_begin = std::max(seq_start, window_begin);
+            L d_seqs_end = std::min(seq_end, window_end);
+            L n_elems = d_seqs_end - d_seqs_begin;
+
+            // If the left window is cut short, we want to
+            // start by the same amount in the output.
+            L out_offset = d_seqs_begin - window_begin;
+
+            vec_add(d_seqs + d_seqs_begin * I,
+                    d_cols + (j * nF * I) + (out_offset * I),
+                    static_cast<A>(1.), n_elems * I);
+        }
+
+        seq_start += lengths[i];
     }
 }
 

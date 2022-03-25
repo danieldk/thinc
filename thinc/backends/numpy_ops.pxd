@@ -23,12 +23,9 @@ cdef extern from "cpu_kernels.hh":
     void cpu_reduce_sum[A, L](A* sums__bo, const A* X__to, const L* lengths__b,
         L B, L T, L O) except +
     void cpu_relu[A, L](A* X, L N)
+    void backprop_seq2col[A, L](A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L nW, L nL)
+    void seq2col[A, L](A* output, const A* X, const L* lengths, L nW, L B, L I, L nL)
 
-
-cdef void seq2col(float* output, const float* X, const int* L, int nW, int B, int I, int nL) nogil
-
-cdef void backprop_seq2col(float* d_seqs,
-        const float* d_cols, const int* L, int B, int I, int nW, int nL) nogil
 
 cdef int cpu_backprop_maxout(float* dX__bop,
         const float* dX__bo, const int* which__bo, int B, int O, int P) nogil except -1
