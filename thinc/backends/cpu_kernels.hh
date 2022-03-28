@@ -50,6 +50,24 @@ void cpu_maxout(A* best__bo, L* which__bo, const A* cands__bop, L B, L O, L P)
 }
 
 template <typename A, typename L>
+void cpu_backprop_maxout(A* dX__bop, const A* dX__bo, const L* which__bo,
+    L B, L O, L P)
+{
+    for (L b = 0; b < B; ++b) {
+        for (L o = 0; o < O; ++o) {
+            if (*which__bo >= P) {
+                throw std::out_of_range(std::string("index ") + std::to_string(*which__bo) + " is out of bounds for maxout with size " + std::to_string(P));
+            }
+
+            dX__bop[*which__bo] = *dX__bo;
+            dX__bop += P;
+            dX__bo += 1;
+            which__bo += 1;
+        }
+    }
+}
+
+template <typename A, typename L>
 void cpu_reduce_max(A* maxes__bo, L* which__bo, const A* X__to,
     const L* lengths__b, L B, L T, L O)
 {
@@ -68,7 +86,7 @@ void cpu_reduce_max(A* maxes__bo, L* which__bo, const A* X__to,
 
         T -= *length;
 
-        memcpy(maxes__bo, X__to, O * sizeof(maxes__bo[0]));
+        memcpy(maxes__bo, X__to, O * sizeof(*maxes__bo));
         X__to += O;
         for (L i = 1; i < *length; ++i) {
             for (L j = 0; j < O; ++j) {
@@ -129,6 +147,27 @@ void cpu_mish(A* Y, L N, A threshold)
 }
 
 template <typename A, typename L>
+void cpu_backprop_mish(A* dX, const A* X, L N, A threshold)
+{
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
+    for (L i = 0; i < N; ++i) {
+        A x = X[i];
+
+        if (x < threshold) {
+            A exp_x = std::exp(x);
+            A exp_2x = std::exp(2 * x);
+            A exp_3x = std::exp(3 * x);
+            A omega = (4. * (x + 1)) + (4 * exp_2x) + exp_3x + exp_x * (4. * x + 6);
+            A delta = 2. * exp_x + exp_2x + 2.;
+            dX[i] = dX[i] * ((exp_x * omega) / (delta * delta));
+        }
+    }
+}
+
+template <typename A, typename L>
 void cpu_reduce_sum(A* sums__bo, const A* X__to, const L* lengths__b,
     L B, L T, L O)
 {
@@ -171,7 +210,8 @@ void cpu_relu(A* X, L N)
 }
 
 template <typename A, typename L>
-void seq2col(A* output, const A* X, const L* lengths, L nW, L B, L I, L nL) {
+void seq2col(A* output, const A* X, const L* lengths, L nW, L B, L I, L nL)
+{
     // Let's say nW is 1 (it usually is). Then we want to take:
 
     // 1a 1b 1c
@@ -227,21 +267,20 @@ void seq2col(A* output, const A* X, const L* lengths, L nW, L B, L I, L nL) {
             L x_end = std::min(seq_end, window_end);
             L n_elems = x_end - x_start;
 
-
             L out_offset = x_start - window_start;
 
             std::memcpy(output + (j * nF * I) + (out_offset * I),
-                   X + (x_start * I),
-                   n_elems * I * sizeof(output[0]));
+                X + (x_start * I),
+                n_elems * I * sizeof(*output));
         }
 
         seq_start += lengths[i];
     }
 }
 
-
 template <typename A, typename L>
-void backprop_seq2col(A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L nW, L nL) {
+void backprop_seq2col(A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L nW, L nL)
+{
     // here's what we're doing, if we had 2d indexing.
     // for i in range(b):
     //     d_seq[i] += d_cols[i-2, 4]
@@ -276,8 +315,8 @@ void backprop_seq2col(A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L 
             L out_offset = d_seqs_begin - window_begin;
 
             vec_add(d_seqs + d_seqs_begin * I,
-                    d_cols + (j * nF * I) + (out_offset * I),
-                    static_cast<A>(1.), n_elems * I);
+                d_cols + (j * nF * I) + (out_offset * I),
+                static_cast<A>(1.), n_elems * I);
         }
 
         seq_start += lengths[i];

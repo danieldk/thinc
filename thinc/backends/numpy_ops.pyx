@@ -179,18 +179,22 @@ class NumpyOps(Ops):
                     &X[0, 0, 0], B, O, P)
         return best, which
 
-    def backprop_maxout(self, const float[:, ::1] dY, int[:, ::1] which, int P):
+    def backprop_maxout(self, reals2d_ft dY, int[:, ::1] which, int P):
         cdef int B = dY.shape[0]
         cdef int O = dY.shape[1]
+        cdef np.ndarray dX
 
-        cdef np.ndarray dX = numpy.zeros((B, O, P), dtype='float32')
-        cpu_backprop_maxout(<float*>dX.data,
-            &dY[0, 0], &which[0, 0], B, O, P)
+        if reals2d_ft == float2d_t:
+            dX = numpy.zeros((B, O, P), dtype='float32')
+            cpu_backprop_maxout(<float*>dX.data, <float*>&dY[0, 0], &which[0, 0], B, O, P)
+        else:
+            dX = numpy.zeros((B, O, P), dtype='float64')
+            cpu_backprop_maxout(<double*>dX.data, <double*>&dY[0, 0], &which[0, 0], B, O, P)
+
         return dX
 
     def mish(self, np.ndarray X, threshold=20.0, inplace: bool = False):
         cdef np.ndarray Y
-
         if inplace:
             Y = X
         else:
@@ -210,15 +214,19 @@ class NumpyOps(Ops):
         _check_compatible_shape(dY, X)
 
         cdef np.ndarray dX
-        if dY.dtype == "float32" and X.dtype == "float32":
-            if inplace:
-                dX = dY
-            else:
-                dX = self.xp.empty_like(X)
-            cpu_backprop_mish(<float*>dX.data, <float*>dY.data, <float*>X.data, threshold, X.size)
-            return dX
+        if inplace:
+            dX = dY
+        else:
+            dX = dY.copy()
+
+        if dX.dtype == "float32" and X.dtype == "float32":
+            cpu_backprop_mish(<float*>dX.data, <float*>X.data, <int>X.size, <float>threshold)
+        elif dX.dtype == "float64" and X.dtype == "float64":
+            cpu_backprop_mish(<double*>dX.data, <double*>X.data, <int>X.size, <double>threshold)
         else:
             return super().backprop_mish(dY, X, threshold, inplace)
+
+        return dX
 
     def seq2col(self, reals2d_ft seq, int nW, *, int[::1] lengths=None):
         """Given an (M, N) sequence of vectors, return an (M, N*(nW*2+1))
@@ -450,19 +458,6 @@ def check_seq2col_lengths(ops, lengths, B):
     return lengths
 
 
-cdef int cpu_backprop_maxout(float* dX__bop,
-        const float* dX__bo, const int* which__bo, int B, int O, int P) nogil except -1:
-    for b in range(B):
-        for o in range(O):
-            if which__bo[0] >= P:
-                raise IndexError(f"index {which__bo[0]} is out of bounds for maxout with size {P}")
-            dX__bop[which__bo[0]] = dX__bo[0]
-            dX__bop += P
-            dX__bo += 1
-            which__bo += 1
-    return 0
-
-
 def cpu_clip_gradient(weight_t[::1] gradient, weight_t threshold):
     grad_norm = Vec.norm(&gradient[0], gradient.shape[0])
     if grad_norm >= threshold:
@@ -555,23 +550,6 @@ cdef void cpu_update_averages(weight_t* ema,
     cdef int i
     for i in range(nr_weight): # num_threads=4, schedule='static'):
         ema[i] -= one_minus_decay * (ema[i] - weights[i])
-
-
-cdef void cpu_backprop_mish(weight_t* dX,
-        const weight_t* dY, const weight_t* X, float threshold, int N) nogil:
-    cdef float one = 1.
-    cdef float exp_x, exp_2x, exp_3x, omega, delta
-    for i in range(N):
-        x = X[i]
-        if x >= threshold:
-            dX[i] = dY[i]
-        else:
-            exp_x = expf(x)
-            exp_2x = expf(2*x)
-            exp_3x = expf(3*x)
-            omega = (4. * (x+1)) + (4 * exp_2x) + exp_3x + exp_x * (4.*x+6)
-            delta = 2. * exp_x + exp_2x + 2.
-            dX[i] = dY[i] * ((exp_x * omega) / (delta * delta))
 
 
 cdef cpu_floats_ptr2array(float* ptr, shape):
