@@ -1,5 +1,5 @@
-#ifndef CPU_KERNELS_H_
-#define CPU_KERNELS_H_
+#ifndef CPU_KERNELS_HH
+#define CPU_KERNELS_HH
 
 #include <algorithm>
 #include <cmath>
@@ -7,6 +7,9 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+
+
+// All elementwise functions, such as most activations, work in-place.
 
 template <typename A, typename L>
 L argmax(A* arr, L len)
@@ -388,4 +391,4 @@ void backprop_seq2col(A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L 
     }
 }
 
-#endif // CPU_KERNELS_H_
+#endif // CPU_KERNELS_HH
