@@ -93,12 +93,7 @@ class NumpyOps(Ops):
         return blis.py.gemm(x, y, out=out, trans1=trans1, trans2=trans2, beta=0.)
 
     def relu(self, np.ndarray X, inplace=False):
-        cdef np.ndarray Y
-
-        if inplace:
-            Y = X
-        else:
-            Y = numpy.array(X)
+        cdef np.ndarray Y = _inplace_or_copy(X, inplace)
 
         if X.dtype == "float32":
             cpu_relu(<float *>Y.data, <int>Y.size)
@@ -118,6 +113,7 @@ class NumpyOps(Ops):
         cdef const weight_t* Y_ptr = <const weight_t*>Y.data
         cdef np.ndarray dX
         if dY.dtype == "float32" and Y.dtype == "float32":
+            dX = _inplace_or_copy(dY, inplace)
             if inplace:
                 dX = dY
             else:
@@ -195,14 +191,12 @@ class NumpyOps(Ops):
 
     def mish(self, np.ndarray X, threshold=20.0, inplace: bool = False):
         cdef np.ndarray Y
-        if inplace:
-            Y = X
-        else:
-            Y = X.copy()
 
         if X.dtype == "float32":
+            Y = _inplace_or_copy(X, inplace)
             cpu_mish(<float *>Y.data, <int>Y.size, <float>threshold)
         elif X.dtype == "float64":
+            Y = _inplace_or_copy(X, inplace)
             cpu_mish(<double *>Y.data, <int>Y.size, <double>threshold)
         else:
             return super().relu(X, inplace=inplace)
@@ -214,14 +208,12 @@ class NumpyOps(Ops):
         _check_compatible_shape(dY, X)
 
         cdef np.ndarray dX
-        if inplace:
-            dX = dY
-        else:
-            dX = dY.copy()
 
-        if dX.dtype == "float32" and X.dtype == "float32":
+        if dY.dtype == "float32" and X.dtype == "float32":
+            dX = _inplace_or_copy(dY, inplace)
             cpu_backprop_mish(<float*>dX.data, <float*>X.data, <int>X.size, <float>threshold)
-        elif dX.dtype == "float64" and X.dtype == "float64":
+        elif dY.dtype == "float64" and X.dtype == "float64":
+            dX = _inplace_or_copy(dY, inplace)
             cpu_backprop_mish(<double*>dX.data, <double*>X.data, <int>X.size, <double>threshold)
         else:
             return super().backprop_mish(dY, X, threshold, inplace)
@@ -1118,3 +1110,10 @@ def _check_compatible_shape(u: np.ndarray, v: np.ndarray):
     if u.shape != v.shape:
         msg = f"arrays have incompatible shapes: {u.shape} and {v.shape}"
         raise ValueError(msg)
+
+
+cdef inline np.ndarray _inplace_or_copy(np.ndarray X, inplace):
+    if inplace:
+        return X
+    else:
+        return numpy.array(X)
