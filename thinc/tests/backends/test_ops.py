@@ -32,15 +32,6 @@ ALL_OPS = XP_OPS + [VANILLA_OPS]
 FLOAT_TYPES = ["float32", "float64"]
 
 
-def ops_with_dtypes(all_ops, dtypes):
-    ops_dtypes = []
-    for ops in all_ops:
-        for dtype in dtypes:
-            if not (isinstance(ops, NumpyOps) and dtype == "float64"):
-                ops_dtypes.append((ops, dtype))
-    return ops_dtypes
-
-
 def create_pytorch_funcs():
     import torch
     import math
@@ -220,7 +211,8 @@ def test_maxout(ops, dtype, X):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_maxout(ops, dtype):
     dX = ops.backprop_maxout(
         ops.asarray2f([[1.0, 2.0], [3.0, 4.0]], dtype=dtype),
@@ -455,7 +447,8 @@ def test_seq2col_window_two_lengths(ops, dtype):
     )
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_seq2col_window_one_small(ops, dtype):
     cols = ops.asarray(
         [[0.0, 0.0, 0.0], [-1.0, 0.0, 1.0], [2.0, 0.0, 0.0]], dtype=dtype
@@ -467,7 +460,8 @@ def test_backprop_seq2col_window_one_small(ops, dtype):
     assert_allclose(seq, expected, atol=0.001, rtol=0.001)
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 @settings(max_examples=MAX_EXAMPLES, deadline=None)
 @given(X=strategies.arrays_BI())
 def test_backprop_seq2col_window_one(ops, dtype, X):
@@ -489,7 +483,8 @@ def test_backprop_seq2col_window_one(ops, dtype, X):
     ops.xp.testing.assert_allclose(target, predicted, atol=0.001, rtol=0.001)
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_seq2col_window_one_lengths(ops, dtype):
     d_y = ops.xp.arange(0.1, 4.6, step=0.1, dtype=dtype).reshape(5, 9)
     lengths = ops.asarray1i([1, 3, 1])
@@ -750,7 +745,8 @@ def test_reduce_sum(ops, dtype):
         ops.reduce_sum(m, ops.xp.array([-1, 10, 5, 5], dtype="i"))
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_fails_with_incorrect_length(ops, dtype):
     with pytest.raises(ValueError, match=r"lengths must be"):
         ops.backprop_reduce_sum(
@@ -888,7 +884,8 @@ def test_mish(ops, X):
     assert not ops.xp.isnan(Y).any()
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(XP_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", XP_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 @pytest.mark.parametrize(
     "op",
     [
