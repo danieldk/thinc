@@ -199,7 +199,7 @@ class NumpyOps(Ops):
             Y = _inplace_or_copy(X, inplace)
             cpu_mish(<double *>Y.data, <int>Y.size, <double>threshold)
         else:
-            return super().relu(X, inplace=inplace)
+            return super().mish(X, inplace=inplace)
 
         return Y
 
