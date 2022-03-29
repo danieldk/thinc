@@ -53,6 +53,10 @@ template <typename A, typename L>
 void cpu_backprop_maxout(A* dX__bop, const A* dX__bo, const L* which__bo,
     L B, L O, L P)
 {
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
     for (L b = 0; b < B; ++b) {
         for (L o = 0; o < O; ++o) {
             if (*which__bo >= P) {
