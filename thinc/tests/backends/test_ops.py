@@ -622,7 +622,8 @@ def test_large_backprop_seq2col_gpu_against_cpu(nW):
     assert_allclose(d_seqs, d_seqs_gpu.get())
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 @settings(max_examples=MAX_EXAMPLES, deadline=None)
 @given(X=strategies.arrays_BI())
 def test_backprop_reduce_sum(ops, dtype, X):
@@ -797,7 +798,8 @@ def test_reduce_max(ops, dtype):
         ops.reduce_max(m, ops.xp.array([-1, 10, 5, 5], dtype="i"))
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_reduce_max(ops, dtype):
     dX = ops.backprop_reduce_max(
         ops.xp.arange(1, 7, dtype=dtype).reshape(2, 3),
@@ -849,7 +851,8 @@ def test_reduce_mean(ops, dtype):
         ops.reduce_mean(X, ops.xp.array([-1, 5], dtype="i"))
 
 
-@pytest.mark.parametrize("ops,dtype", ops_with_dtypes(ALL_OPS, FLOAT_TYPES))
+@pytest.mark.parametrize("ops", ALL_OPS)
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_backprop_reduce_mean(ops, dtype):
     dX = ops.backprop_reduce_mean(
         ops.xp.arange(1, 7, dtype=dtype).reshape(2, 3),

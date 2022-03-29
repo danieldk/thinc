@@ -19,21 +19,19 @@ cdef extern from "cpu_kernels.hh":
         L B, L O, L P) except +
     void cpu_reduce_max[A, L](A* maxes__bo, L* which_bo, const A* X__to,
         const L* lengths__b, L B, L T, L O) except +
+
+    void cpu_backprop_reduce_max[A, L](A* dX__to, const A* d_maxes__bo, const L* which__bo,
+        const L* lengths__b, L B, L T, L O) except +
     void cpu_reduce_mean[A, L](A* means__bo, const A* X__to, const L* lengths__b,
         L B, L T, L O) except +
+    void cpu_backprop_reduce_mean[A, L](A* dX__to, const A* d_means__bo, const L* lengths__b,
+        L B, L T, L O)
     void cpu_mish[A, L](A* Y, L N, A threshold)
     void cpu_backprop_mish[A, L](A* dX, const A* X, L N, A threshold)
     void cpu_reduce_sum[A, L](A* sums__bo, const A* X__to, const L* lengths__b,
         L B, L T, L O) except +
+    void cpu_backprop_reduce_sum[A, L](A* dX__to, const A* d_sums__bo, const L* lengths__b,
+        L B, L T, L O)
     void cpu_relu[A, L](A* X, L N)
     void backprop_seq2col[A, L](A* d_seqs, const A* d_cols, const L* lengths, L B, L I, L nW, L nL)
     void seq2col[A, L](A* output, const A* X, const L* lengths, L nW, L B, L I, L nL)
-
-
-cdef void cpu_backprop_reduce_mean(float* dX__to,
-        const float* d_means__bo, const int* lengths__b,
-        int B, int T, int O) nogil
-
-cdef int cpu_backprop_reduce_max(float* dX__to,
-        const float* d_maxes__bo, const int* which__bo, const int* lengths__b,
-        int B, int T, int O) nogil except -1

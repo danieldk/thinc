@@ -104,6 +104,30 @@ void cpu_reduce_max(A* maxes__bo, L* which__bo, const A* X__to,
 }
 
 template <typename A, typename L>
+void cpu_backprop_reduce_max(A* dX__to, const A* d_maxes__bo, const L* which__bo,
+    const L* lengths__b, L B, L T, L O)
+{
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
+    for (const L* length = lengths__b; length < lengths__b + B; ++length) {
+        for (L i = 0; i < O; ++i) {
+            L item = which__bo[i];
+            if (item >= *length) {
+                throw std::out_of_range(std::string("index ") + std::to_string(item) + " is out of bounds for maxout with length " + std::to_string(*length));
+            }
+
+            dX__to[item * O + i] = d_maxes__bo[i];
+        }
+
+        dX__to += *length * O;
+        d_maxes__bo += O;
+        which__bo += O;
+    }
+}
+
+template <typename A, typename L>
 void cpu_reduce_mean(A* means__bo, const A* X__to, const L* lengths__b,
     L B, L T, L O)
 {
@@ -129,6 +153,25 @@ void cpu_reduce_mean(A* means__bo, const A* X__to, const L* lengths__b,
         }
 
         means__bo += O;
+    }
+}
+
+template <typename A, typename L>
+void cpu_backprop_reduce_mean(A* dX__to, const A* d_means__bo, const L* lengths__b,
+    L B, L T, L O)
+{
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
+    for (const L* length = lengths__b; length < lengths__b + B; ++length) {
+        A scale = 1. / *length;
+        for (L i = 0; i < *length; ++i) {
+            vec_add(dX__to, d_means__bo, scale, O);
+            dX__to += O;
+        }
+
+        d_means__bo += O;
     }
 }
 
@@ -192,6 +235,24 @@ void cpu_reduce_sum(A* sums__bo, const A* X__to, const L* lengths__b,
         }
 
         sums__bo += O;
+    }
+}
+
+template <typename A, typename L>
+void cpu_backprop_reduce_sum(A* dX__to, const A* d_sums__bo, const L* lengths__b,
+    L B, L T, L O)
+{
+    static_assert(std::is_floating_point<A>::value,
+        "Array should be floating point");
+    static_assert(std::is_integral<L>::value, "Array length should be integral");
+
+    for (const L* length = lengths__b; length < lengths__b + B; ++length) {
+        for (L i = 0; i < *length; ++i) {
+            vec_add(dX__to, d_sums__bo, static_cast<A>(1.0), O);
+            dX__to += O;
+        }
+
+        d_sums__bo += O;
     }
 }
 
