@@ -3,6 +3,10 @@ import math
 from typing import Dict, Optional, Union, Tuple, List, cast
 from collections import defaultdict
 
+from torch.optim import AdamW
+
+from thinc.util import xp2torch
+
 from .backends import get_array_ops
 from .types import Generator, FloatsXd
 from .config import registry
@@ -352,6 +356,96 @@ class Optimizer(object):
             ops.reshape_f(weights_1D, weights.shape),
             ops.reshape_f(gradient_1D, gradient.shape),
         )
+
+
+import torch
+
+
+@registry.optimizers("TorchAdam.v1")
+def TorchAdam(
+    learn_rate: float = ADAM_DEFAULTS["learn_rate"],
+    *,
+    L2: float = ADAM_DEFAULTS["L2"],
+    beta1: float = ADAM_DEFAULTS["beta1"],
+    beta2: float = ADAM_DEFAULTS["beta2"],
+    eps: float = ADAM_DEFAULTS["eps"],
+    grad_clip: float = ADAM_DEFAULTS["grad_clip"],
+    L2_is_weight_decay: bool = cast(bool, ADAM_DEFAULTS["L2_is_weight_decay"]),
+    use_averages: bool = True,
+):
+    kwargs = {
+        "lr":learn_rate, "betas":(beta1, beta2), "eps":eps, "weight_decay":L2 }
+    factory = torch.optim.AdamW if L2_is_weight_decay else torch.optim.Adam
+    return TorchOptimizer(factory, kwargs, grad_clip, use_averages)
+
+
+class TorchOptimizer:
+    def __init__(self, optimizer_factory, optimizer_kwargs, grad_clip: float,
+                 use_averages: bool):
+        self._optimizer_factory = optimizer_factory
+        self._optimizer_kwargs = optimizer_kwargs
+        self._optimizer = None
+        self._grad_clip = grad_clip
+
+        self.averages = {} if use_averages else None
+        self.nr_update = defaultdict(int)
+        self.xp_tensors = {}
+        self.learn_rate = optimizer_kwargs["lr"]
+
+    def __call__(
+        self,
+        key: Tuple[int, str],
+        weights: FloatsXd,
+        gradient: FloatsXd,
+        *,
+        lr_scale: float = 1.0,
+    ):
+        self._add_if_unseen(key, weights, gradient)
+
+    def _add_if_unseen(self, key: Tuple[int, str], weights: FloatsXd, gradient: FloatsXd):
+        optimizer = self._create_optimizer(key, weights, gradient)
+        if key not in self.xp_tensors:
+            weights_torch = xp2torch(weights, requires_grad=True)
+            weights_torch.grad = xp2torch(gradient)
+            optimizer.add_param_group({"params": weights_torch})
+            self.xp_tensors[key] = weights
+
+
+
+    def _create_optimizer(self, key: Tuple[int, str], weights: FloatsXd, gradient: FloatsXd) -> torch.optim.Optimizer:
+        if self._optimizer is None:
+            weights_torch = xp2torch(weights, requires_grad=True)
+            weights_torch.grad = xp2torch(gradient)
+            self._optimizer = self._optimizer_factory([weights_torch], **self._optimizer_kwargs)
+            self.xp_tensors[key] = weights
+        return self._optimizer
+
+    def _clip_gradients(self):
+        if self._grad_clip > 0.0:
+            for group in self._optimizer.param_groups:
+                for p in group['params']:
+                    norm = torch.nn.utils.clip_grad_norm_(p, self._grad_clip)
+
+    def _update_averages(self):
+        if self.averages is None:
+            return
+
+        for key, weights in self.xp_tensors.items():
+            ops = get_array_ops(weights)
+            if key not in self.averages:
+                self.averages[key] = ops.alloc(weights.shape, dtype="float32")
+            ops.update_averages(self.averages[key], weights, self.nr_update[key])
+
+
+    def step_schedules(self):
+        if self._optimizer is None:
+            raise ValueError("No optimizer")
+        for key in self.xp_tensors:
+            self.nr_update[key] += 1
+        self._clip_gradients()
+        self._optimizer.step()
+        self._optimizer.zero_grad(set_to_none=False)
+        self._update_averages()
 
 
 __all__ = ["Adam", "RAdam", "SGD", "Optimizer", "ADAM_DEFAULTS", "SGD_DEFAULTS"]
