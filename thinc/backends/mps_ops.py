@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     # during type checking.
     _Ops = Ops
 else:
-    try:
-        from thinc_apple_ops import AppleOps
+    from .apple_ops import AppleOps
 
+    try:
         _Ops = AppleOps
     except ImportError:
         _Ops = NumpyOps

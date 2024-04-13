@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import platform
 import sys
 from setuptools.command.build_ext import build_ext
 from sysconfig import get_path
@@ -13,16 +14,22 @@ from Cython.Compiler import Options
 # http://docs.cython.org/en/latest/src/userguide/source_files_and_compilation.html#compiler-options
 Options.docstrings = True
 
+APPLE_OPS = ["thinc.backends.apple_ops", "thinc.backends.apple_blas"]
 
 PACKAGES = find_packages()
-MOD_NAMES = [
-    "thinc.backends.cblas",
-    "thinc.backends.linalg",
-    "thinc.backends.numpy_ops",
-    "thinc.extra.search",
-    "thinc.layers.sparselinear",
-    "thinc.layers.premap_ids",
-]
+MOD_NAMES = (
+    [
+        "thinc.backends.cblas",
+        "thinc.backends.linalg",
+        "thinc.backends.numpy_ops",
+        "thinc.extra.search",
+        "thinc.layers.sparselinear",
+        "thinc.layers.premap_ids",
+    ]
+    + APPLE_OPS
+    if platform.system() == "Darwin"
+    else []
+)
 COMPILE_OPTIONS = {
     "msvc": ["/Ox", "/EHsc"],
     "other": ["-O3", "-Wno-strict-prototypes", "-Wno-unused-function", "-std=c++11"],
